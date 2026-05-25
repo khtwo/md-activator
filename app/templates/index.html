@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Markdown Viewer</title>
+  <link href="/assets/quasar/quasar.prod.css" rel="stylesheet" type="text/css">
+  <link href="/assets/quasar-extras/material-icons/material-icons.css" rel="stylesheet" type="text/css">
+  <link href="/assets/prismjs/prism.min.css" rel="stylesheet" type="text/css">
+  <link href="/static/style.css" rel="stylesheet" type="text/css">
+</head>
+<body>
+  {% raw %}
+  <div id="q-app" class="q-pa-md">
+    <q-layout view="hHh lpR fFf" class="shadow-2 rounded-borders">
+      <q-page-container>
+        <q-page class="q-pa-md">
+          <q-toolbar class="viewer-toolbar viewer-page-toolbar">
+            <q-toolbar-title class="viewer-title">{{ currentFileName }}</q-toolbar-title>
+            <div class="viewer-controls">
+              <q-select
+                class="viewer-file-select"
+                dense
+                standout
+                options-dense
+                v-model="targetPath"
+                :options="fileOptions"
+                option-label="label"
+                option-value="value"
+                emit-value
+                map-options
+                aria-label="Current folder"
+                @update:model-value="onFileSelected"
+              >
+                <template v-slot:option="scope">
+                  <q-item
+                    v-bind="scope.itemProps"
+                    class="viewer-file-option"
+                    :style="{ paddingLeft: (12 + (Number(scope.opt.depth) || 0) * 18) + 'px' }"
+                  >
+                    <q-item-section avatar class="viewer-file-option-icon">
+                      <q-icon
+                        :name="scope.opt.kind === 'parent' ? 'drive_folder_upload' : (scope.opt.kind === 'folder' ? 'folder' : 'description')"
+                        size="18px"
+                      />
+                    </q-item-section>
+                    <q-item-section>
+                      <q-item-label>{{ scope.opt.label }}</q-item-label>
+                    </q-item-section>
+                  </q-item>
+                </template>
+              </q-select>
+              <q-select
+                class="viewer-theme-select"
+                dense
+                standout
+                options-dense
+                v-model="selectedTheme"
+                :options="themeOptions"
+                option-label="label"
+                option-value="value"
+                emit-value
+                map-options
+                aria-label="Theme"
+                @update:model-value="applyTheme"
+              />
+            </div>
+          </q-toolbar>
+          <q-banner v-if="error" class="bg-red-1 text-red-10 q-mb-md">{{ error }}</q-banner>
+          <div class="markdown-body" v-html="html" @click="onMarkdownClick" @change="onMarkdownChange" @dblclick="onMarkdownDoubleClick"></div>
+        </q-page>
+      </q-page-container>
+    </q-layout>
+  </div>
+  {% endraw %}
+
+  <script src="/assets/vue/vue.global.prod.js"></script>
+  <script src="/assets/quasar/quasar.umd.prod.js"></script>
+  <script src="/assets/prismjs/prism.min.js"></script>
+  <script src="/assets/mermaid/mermaid.min.js"></script>
+  <script src="/static/app.js"></script>
+</body>
+</html>
