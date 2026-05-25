@@ -148,7 +148,7 @@ class MarkdownRenderer:
                 selected = self._folder_markdown_entrypoint(md_path.parent)
                 if selected:
                     return self.render(self._to_relative(selected))
-            raise FileNotFoundError(f"Markdown file not found: {md_path}")
+            raise FileNotFoundError(self._markdown_file_not_found_message(md_path))
         if md_path.suffix.lower() != ".md":
             raise ValueError("Only .md files and folders are supported")
 
@@ -217,7 +217,7 @@ class MarkdownRenderer:
     def update_checkbox(self, path: str, line: int, index: int, checked: bool) -> CheckboxUpdateResult:
         md_path = self.resolve_markdown_path(path)
         if not md_path.exists() or not md_path.is_file():
-            raise FileNotFoundError(f"Markdown file not found: {md_path}")
+            raise FileNotFoundError(self._markdown_file_not_found_message(md_path))
         if line < 1:
             raise ValueError("Checkbox line must be 1 or greater")
         if index < 0:
@@ -255,7 +255,7 @@ class MarkdownRenderer:
     def update_code_block(self, path: str, line: int, index: int, content: str) -> CodeBlockUpdateResult:
         md_path = self.resolve_markdown_path(path)
         if not md_path.exists() or not md_path.is_file():
-            raise FileNotFoundError(f"Markdown file not found: {md_path}")
+            raise FileNotFoundError(self._markdown_file_not_found_message(md_path))
         if line < 1:
             raise ValueError("Code block line must be 1 or greater")
         if index < 0:
@@ -317,6 +317,9 @@ class MarkdownRenderer:
 
     def _to_relative(self, path: Path) -> str:
         return str(path.relative_to(self.root_dir)).replace("\\", "/")
+
+    def _markdown_file_not_found_message(self, path: Path) -> str:
+        return f"Markdown file not found: {self._to_relative(path)}"
 
     def _render_folder(self, folder: Path) -> RenderResult:
         selected = self._folder_markdown_entrypoint(folder)

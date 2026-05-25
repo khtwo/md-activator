@@ -1,5 +1,5 @@
 [project]
-name = "md-html-editor"
+name = "md-activator"
 version = "0.1.0"
 description = "MD Activator"
 requires-python = ">=3.11"
