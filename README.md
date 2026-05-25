@@ -149,7 +149,7 @@ img/website_bird_protection.png
 
 ```mermaid
 flowchart TD
-    A[User enters search query] --> B[Google Search Frontend]
+    A[User enters search query] --> B[Search Frontend]
 
     B --> C[Query Understanding]
     C --> C1[Spell correction]
@@ -160,7 +160,7 @@ flowchart TD
     C --> D[Retrieve Candidate Pages]
 
     subgraph Indexing Pipeline
-        E[Web Crawlers / Googlebot] --> F[Fetch web pages]
+        E[Web Crawlers / Bot] --> F[Fetch web pages]
         F --> G[Parse HTML, links, media, metadata]
         G --> H[Render JavaScript when needed]
         H --> I[Extract content and signals]
