@@ -81,6 +81,26 @@ createApp({
       window.history[method]({ path }, '', nextUrl);
     };
 
+    const readApiPayload = async (res, fallbackMessage) => {
+      const contentType = res.headers.get('content-type') || '';
+      if (contentType.includes('application/json')) {
+        try {
+          return await res.json();
+        } catch {
+          return { detail: fallbackMessage };
+        }
+      }
+
+      const text = await res.text();
+      return { detail: text || fallbackMessage };
+    };
+
+    const requireApiPayload = async (res, fallbackMessage) => {
+      const payload = await readApiPayload(res, fallbackMessage);
+      if (!res.ok) throw new Error(payload.detail || fallbackMessage);
+      return payload;
+    };
+
     const loadFile = async (path, basePath = '', options = {}) => {
       error.value = '';
       try {
@@ -90,8 +110,7 @@ createApp({
         const query = params.toString() ? `?${params.toString()}` : '';
 
         const res = await fetch(`/api/render${query}`);
-        const payload = await res.json();
-        if (!res.ok) throw new Error(payload.detail || 'Failed to render markdown');
+        const payload = await requireApiPayload(res, 'Failed to render markdown');
 
         currentPath.value = payload.path;
         targetPath.value = payload.path;
@@ -165,8 +184,7 @@ createApp({
             checked
           })
         });
-        const payload = await res.json();
-        if (!res.ok) throw new Error(payload.detail || 'Failed to update checkbox');
+        const payload = await requireApiPayload(res, 'Failed to update checkbox');
         const nextPath = payload.path || currentPath.value;
         await loadFile(nextPath, '', { replaceUrl: true });
       } catch (e) {
@@ -273,8 +291,7 @@ createApp({
               content: editor.value
             })
           });
-          const payload = await res.json();
-          if (!res.ok) throw new Error(payload.detail || 'Failed to update code block');
+          await requireApiPayload(res, 'Failed to update code block');
           await loadFile(currentPath.value, '', { replaceUrl: true });
         } catch (e) {
           saveStarted = false;

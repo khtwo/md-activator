@@ -11,7 +11,7 @@ progress
 ## Questions, Comments, Suggestions
 
 ```text
-We are shifting to a new authentication portal ....
+We need a contribution function ....
 ```
 
 ## Reference

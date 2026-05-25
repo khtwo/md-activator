@@ -23,6 +23,7 @@ def resolve_content_root(root_arg: str | None = None) -> Path:
 
 
 CONTENT_ROOT = resolve_content_root()
+SAVE_PERMISSION_ERROR_DETAIL = "Unable to save markdown file: permission denied"
 
 app = FastAPI(title="MD Activator", docs_url=None, redoc_url=None)
 app.mount("/assets", StaticFiles(directory=APP_ROOT / "to-html"), name="assets")
@@ -158,6 +159,8 @@ def update_checkbox(payload: CheckboxUpdateRequest) -> dict:
         }
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=SAVE_PERMISSION_ERROR_DETAIL) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -178,6 +181,8 @@ def update_code_block(payload: CodeBlockUpdateRequest) -> dict:
         }
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=SAVE_PERMISSION_ERROR_DETAIL) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
