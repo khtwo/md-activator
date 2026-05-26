@@ -1,6 +1,8 @@
 # MD Activator
 
-Lightweight local web server for viewing and editing Markdown files. Elevate the use of .md files in human-in-the-loop AI workflows.
+A local-first, lightweight Markdown workflow tool for AI-assisted development.
+
+Turn plain `.md` files into interactive pages with checkboxes, progress bars, Mermaid diagrams, editable text blocks, buttons, and write-back updates.
 
 ## Start
 
@@ -21,7 +23,7 @@ To use a different port, pass `--port <port>`
 To use a different folder, pass `--cd <folder>`
 
 ## Screen Shot
-![App screenshot](img/development_progress.md.png)
+![App screenshot](img/md_activator_demo.gif)
 
 ## Notes
 

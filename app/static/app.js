@@ -236,6 +236,16 @@ createApp({
         if (mouseEvent.target !== editor) saveCodeBlock();
       };
 
+      const restoreCodeBlockContent = (content) => {
+        codeBlock.classList.remove('code-block-editing');
+        if (code) {
+          code.textContent = content;
+          codeBlock.replaceChildren(code);
+        } else {
+          codeBlock.textContent = content;
+        }
+      };
+
       const removeEditorSave = () => {
         editor.removeEventListener('blur', saveCodeBlock);
         editor.removeEventListener('focusout', saveCodeBlock);
@@ -268,12 +278,7 @@ createApp({
         removeEditorSave();
 
         if (editor.value === originalCodeBlockContent) {
-          codeBlock.classList.remove('code-block-editing');
-          if (code) {
-            codeBlock.replaceChildren(code);
-          } else {
-            codeBlock.textContent = originalCodeBlockContent;
-          }
+          restoreCodeBlockContent(originalCodeBlockContent);
           return;
         }
 
@@ -292,6 +297,7 @@ createApp({
             })
           });
           await requireApiPayload(res, 'Failed to update code block');
+          restoreCodeBlockContent(editor.value);
           await loadFile(currentPath.value, '', { replaceUrl: true });
         } catch (e) {
           saveStarted = false;
