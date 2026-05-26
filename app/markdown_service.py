@@ -499,7 +499,7 @@ class MarkdownRenderer:
             nonlocal marker_count
             replacement = match.group(0)
             if marker_count == index:
-                replacement = "[x]" if checked else "[]"
+                replacement = "[x]" if checked else "[ ]"
             marker_count += 1
             return replacement
 
