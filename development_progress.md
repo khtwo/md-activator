@@ -30,7 +30,7 @@ taskTypes/html-web-ui-design/html-web-ui-design.md
 
 ## Confirm Mockup Design
 
-[] Mockup 1 [x] Mockup 2 [x] [confirm]
+[] Mockup 1 [] Mockup 2 [] [confirm]
 
 ## Mockup 1
 

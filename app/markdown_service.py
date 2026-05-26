@@ -60,6 +60,7 @@ RENDER_CACHE_EVICTION_WINDOW_SECONDS = 20.0
 FOLDER_METADATA_CACHE_TTL_SECONDS = 5.0
 FOLDER_METADATA_CACHE_MAX_SIZE = 100
 EDITABLE_CODE_BLOCK_PLACEHOLDER = "@@MD_HTML_EDITOR_CODE_BLOCK_{index}@@"
+NO_MARKDOWN_FOUND_HTML = "<p>No .md files found.</p>"
 MERMAID_START_RE = re.compile(
     r"^\s*(?:flowchart|graph|sequenceDiagram|classDiagram|stateDiagram(?:-v2)?|erDiagram|"
     r"journey|gantt|pie|gitGraph|mindmap|timeline|quadrantChart|requirementDiagram|"
@@ -595,7 +596,7 @@ class MarkdownRenderer:
         folder_metadata = self._folder_metadata(folder)
         return RenderResult(
             relative_path=self._to_relative(folder),
-            html="",
+            html=NO_MARKDOWN_FOUND_HTML,
             links=[],
             files=folder_metadata.files,
             file_options=folder_metadata.file_options,
@@ -610,15 +611,7 @@ class MarkdownRenderer:
         if immediate_readme:
             return immediate_readme
 
-        return next(
-            iter(
-                sorted(
-                    (path for path in folder.rglob("*") if path.is_file() and path.suffix.lower() == ".md"),
-                    key=lambda path: self._to_relative(path).lower(),
-                )
-            ),
-            None,
-        )
+        return immediate_md_files[0] if immediate_md_files else None
 
     def _list_files(self, folder: Path) -> list[str]:
         entries: list[str] = []
