@@ -22,7 +22,7 @@ createApp({
     const currentFileName = computed(() => {
       const path = currentPath.value || targetPath.value || '';
       const name = currentPath.value.split('/').filter(Boolean).pop();
-      return name || path.split('/').filter(Boolean).pop() || 'Markdown Viewer';
+      return name || path.split('/').filter(Boolean).pop() || 'MD Activator';
     });
     const fileOptions = ref([]);
     const html = ref('');
