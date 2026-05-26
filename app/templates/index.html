@@ -51,6 +51,19 @@
                 </template>
               </q-select>
               <q-select
+                class="viewer-auto-refresh-select"
+                dense
+                standout
+                options-dense
+                v-model="selectedAutoRefreshMs"
+                :options="autoRefreshOptions"
+                option-label="label"
+                option-value="value"
+                emit-value
+                map-options
+                aria-label="Auto refresh"
+              ></q-select>
+              <q-select
                 class="viewer-theme-select"
                 dense
                 standout
@@ -63,7 +76,7 @@
                 map-options
                 aria-label="Theme"
                 @update:model-value="applyTheme"
-              />
+              ></q-select>
             </div>
           </q-toolbar>
           <q-banner v-if="error" class="bg-red-1 text-red-10 q-mb-md">{{ error }}</q-banner>

@@ -13,16 +13,22 @@ body {
 
 .viewer-controls {
   display: grid;
-  grid-template-columns: minmax(190px, 280px) 106px;
+  grid-template-columns: minmax(180px, 280px) 118px 106px;
   align-items: center;
   gap: 8px;
   margin-left: auto;
   min-width: 0;
-  width: min(100%, 394px);
+  width: min(100%, 528px);
 }
 
 .viewer-file-select {
   width: 100%;
+  min-width: 0;
+}
+
+.viewer-auto-refresh-select {
+  width: 118px;
+  max-width: 100%;
   min-width: 0;
 }
 
@@ -317,15 +323,19 @@ body.body--dark .markdown-body .step-progress-step--pending .step-progress-label
   }
 
   .viewer-controls {
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr) 118px 106px;
   }
 
   .viewer-file-select {
-    grid-column: 1;
+    grid-column: 1 / -1;
+  }
+
+  .viewer-auto-refresh-select {
+    grid-column: 2;
   }
 
   .viewer-theme-select {
-    grid-column: 2;
+    grid-column: 3;
   }
 }
 
@@ -335,10 +345,12 @@ body.body--dark .markdown-body .step-progress-step--pending .step-progress-label
   }
 
   .viewer-file-select,
+  .viewer-auto-refresh-select,
   .viewer-theme-select {
     grid-column: 1 / -1;
   }
 
+  .viewer-auto-refresh-select,
   .viewer-theme-select {
     width: 100%;
   }

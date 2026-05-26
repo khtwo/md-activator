@@ -32,6 +32,26 @@ createApp({
       { label: 'Light', value: 'light' },
       { label: 'Dark', value: 'dark' }
     ];
+    const autoRefreshOptions = [
+      { label: '1 sec', value: 1_000 },
+      { label: '2 sec', value: 2_000 },
+      { label: '3 sec', value: 3_000 },
+      { label: '5 sec', value: 5_000 },
+      { label: '10 sec', value: 10_000 },
+      { label: '20 sec', value: 20_000 },
+      { label: '30 sec', value: 30_000 },
+      { label: '45 sec', value: 45_000 },
+      { label: '1 min', value: 60_000 },
+      { label: '2 min', value: 120_000 },
+      { label: '3 min', value: 180_000 },
+      { label: '5 min', value: 300_000 },
+      { label: '10 min', value: 600_000 },
+      { label: '20 min', value: 1_200_000 },
+      { label: '30 min', value: 1_800_000 },
+      { label: '45 min', value: 2_700_000 },
+      { label: '60 min', value: 3_600_000 }
+    ];
+    const selectedAutoRefreshMs = ref(10_000);
     const readStoredTheme = () => {
       try {
         return localStorage.getItem('mdViewerTheme') || 'system';
@@ -101,7 +121,22 @@ createApp({
       return payload;
     };
 
+    const applyRenderPayload = async (payload, options = {}) => {
+      currentPath.value = payload.path;
+      targetPath.value = payload.path;
+      fileOptions.value = payload.fileOptions || legacyFileOptions(payload.files || []);
+      html.value = payload.html;
+      syncUrl(payload.path, options.replaceUrl);
+
+      await nextTick();
+      if (window.Prism) Prism.highlightAll();
+      if (window.mermaid) await mermaid.run({ querySelector: '.mermaid' });
+    };
+
+    let latestRenderRequestId = 0;
+
     const loadFile = async (path, basePath = '', options = {}) => {
+      const renderRequestId = ++latestRenderRequestId;
       error.value = '';
       try {
         const params = new URLSearchParams();
@@ -112,18 +147,38 @@ createApp({
         const res = await fetch(`/api/render${query}`);
         const payload = await requireApiPayload(res, 'Failed to render markdown');
 
-        currentPath.value = payload.path;
-        targetPath.value = payload.path;
-        fileOptions.value = payload.fileOptions || legacyFileOptions(payload.files || []);
-        html.value = payload.html;
-        syncUrl(payload.path, options.replaceUrl);
-
-        await nextTick();
-        if (window.Prism) Prism.highlightAll();
-        if (window.mermaid) await mermaid.run({ querySelector: '.mermaid' });
+        if (renderRequestId !== latestRenderRequestId) return;
+        await applyRenderPayload(payload, options);
       } catch (e) {
+        if (renderRequestId !== latestRenderRequestId) return;
         error.value = e.message || String(e);
       }
+    };
+
+    let autoRefreshTimer = null;
+
+    const getMillisecondsSinceLocalMidnight = (now = new Date()) => {
+      const localMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      return now.getTime() - localMidnight.getTime();
+    };
+
+    const getNextAutoRefreshDelay = (intervalMs, now = new Date()) => {
+      const elapsedSinceLocalMidnight = getMillisecondsSinceLocalMidnight(now);
+      const remainder = elapsedSinceLocalMidnight % intervalMs;
+      return remainder === 0 ? intervalMs : intervalMs - remainder;
+    };
+
+    const scheduleAutoRefresh = () => {
+      if (autoRefreshTimer !== null) window.clearTimeout(autoRefreshTimer);
+      const delayMs = getNextAutoRefreshDelay(selectedAutoRefreshMs.value);
+      autoRefreshTimer = window.setTimeout(runAutoRefresh, delayMs);
+    };
+
+    const runAutoRefresh = async () => {
+      autoRefreshTimer = null;
+      const refreshPath = currentPath.value || targetPath.value;
+      await loadFile(refreshPath, '', { replaceUrl: true });
+      scheduleAutoRefresh();
     };
 
     const onFileSelected = (path) => {
@@ -325,8 +380,10 @@ createApp({
     }
 
     watch(selectedTheme, applyTheme);
+    watch(selectedAutoRefreshMs, scheduleAutoRefresh);
     applyTheme(selectedTheme.value);
     loadFile(targetPath.value, '', { replaceUrl: true });
+    scheduleAutoRefresh();
 
     return {
       targetPath,
@@ -337,6 +394,8 @@ createApp({
       error,
       themeOptions,
       selectedTheme,
+      autoRefreshOptions,
+      selectedAutoRefreshMs,
       applyTheme,
       loadFile,
       onFileSelected,

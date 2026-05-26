@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
 import os
 from collections.abc import Sequence
+from contextlib import asynccontextmanager, suppress
 from pathlib import Path
+from typing import Awaitable, Callable
 
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import FileResponse, HTMLResponse
@@ -24,12 +27,36 @@ def resolve_content_root(root_arg: str | None = None) -> Path:
 
 CONTENT_ROOT = resolve_content_root()
 SAVE_PERMISSION_ERROR_DETAIL = "Unable to save markdown file: permission denied"
+RENDER_CACHE_CLEAN_INTERVAL_SECONDS = 10.0
 
-app = FastAPI(title="MD Activator", docs_url=None, redoc_url=None)
+renderer = MarkdownRenderer(CONTENT_ROOT)
+
+
+async def clean_render_cache_periodically(
+    *,
+    sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+) -> None:
+    while True:
+        await sleep(RENDER_CACHE_CLEAN_INTERVAL_SECONDS)
+        renderer.clean_render_cache()
+        renderer.clean_folder_metadata_cache()
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    cleanup_task = asyncio.create_task(clean_render_cache_periodically())
+    try:
+        yield
+    finally:
+        cleanup_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await cleanup_task
+
+
+app = FastAPI(title="MD Activator", docs_url=None, redoc_url=None, lifespan=lifespan)
 app.mount("/assets", StaticFiles(directory=APP_ROOT / "to-html"), name="assets")
 app.mount("/static", StaticFiles(directory=APP_ROOT / "app" / "static"), name="static")
 templates = Jinja2Templates(directory=str(APP_ROOT / "app" / "templates"))
-renderer = MarkdownRenderer(CONTENT_ROOT)
 
 
 def configure_content_root(root: Path) -> Path:
