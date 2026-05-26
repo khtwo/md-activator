@@ -11,7 +11,7 @@ progress
 ## Questions, Comments, Suggestions
 
 ```text
-We are shifting to a new authentication portal? No idea
+We are shifting to a new authentication portal
 ```
 
 ## Reference
@@ -30,7 +30,7 @@ taskTypes/html-web-ui-design/html-web-ui-design.md
 
 ## Confirm Mockup Design
 
-[ ] Mockup 1 [] Mockup 2 [] [confirm]
+[ ] Mockup 1 [ ] Mockup 2 [ ] [confirm]
 
 ## Mockup 1
 
