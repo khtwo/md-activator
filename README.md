@@ -25,6 +25,35 @@ To use a different folder, pass `--cd <folder>`
 ## Screen Shot
 ![App screenshot](img/md_activator_demo.gif)
 
+## What it does
+
+MD Activator serves Markdown files from a local folder and renders them as interactive browser pages.
+
+It supports:
+
+- Markdown viewing
+- Mermaid diagram rendering
+- image and link rendering
+- task checkboxes with write-back updates
+- progress bars generated from task lists
+- editable text blocks with save-back behavior
+- button-style checklist actions
+
+## Use cases
+
+- AI-assisted development notes
+- human-in-the-loop task workflows
+- requirement analysis documents
+- implementation progress tracking
+- lightweight local project dashboards
+- Markdown-based issue execution plans
+
+## Safety note
+
+MD Activator is designed for local use. It reads and updates Markdown files from the selected content folder.
+
+Do not expose the server directly to the public internet unless you have added proper authentication, authorization, and network-level protection.
+
 ## Notes
 
 ```text
