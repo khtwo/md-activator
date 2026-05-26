@@ -1,0 +1,80 @@
+{
+  "name": "md-activator",
+  "displayName": "MD Activator",
+  "description": "Preview interactive MD Activator Markdown beside the VS Code editor.",
+  "version": "0.1.2",
+  "publisher": "khtwo",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/khtwo/md-activator"
+  },
+  "icon": "media/icon.png",
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "markdown",
+    "preview",
+    "mermaid",
+    "tasks",
+    "local"
+  ],
+  "engines": {
+    "vscode": "^1.66.0"
+  },
+  "main": "./extension.js",
+  "activationEvents": [
+    "onCommand:mdActivator.openPreviewToSide",
+    "onCommand:mdActivator.stopServer"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "mdActivator.openPreviewToSide",
+        "title": "Open MD Activator Preview",
+        "category": "MD Activator",
+        "icon": "$(open-preview)"
+      },
+      {
+        "command": "mdActivator.stopServer",
+        "title": "Stop MD Activator Server",
+        "category": "MD Activator"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "mdActivator.openPreviewToSide",
+          "when": "resourceLangId == markdown",
+          "group": "navigation"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "MD Activator",
+      "properties": {
+        "mdActivator.portStart": {
+          "type": "number",
+          "default": 49152,
+          "minimum": 1024,
+          "maximum": 65535,
+          "description": "First localhost port to try when starting the MD Activator preview server."
+        },
+        "mdActivator.uvPath": {
+          "type": "string",
+          "default": "uv",
+          "description": "Command or absolute path used to run uv for the bundled MD Activator server."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "stage:server": "node scripts/stage-server.js",
+    "check": "node --check extension.js && node --check scripts/stage-server.js && node test/run-tests.js",
+    "package": "npm run stage:server && vsce package"
+  },
+  "devDependencies": {
+    "@vscode/vsce": "^3.6.0"
+  }
+}

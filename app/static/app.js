@@ -19,12 +19,16 @@ createApp({
     };
     const targetPath = ref(getPathFromUrl());
     const currentPath = ref('');
-    const currentFileName = computed(() => {
-      const path = currentPath.value || targetPath.value || '';
-      const name = currentPath.value.split('/').filter(Boolean).pop();
-      return name || path.split('/').filter(Boolean).pop() || 'MD Activator';
-    });
     const fileOptions = ref([]);
+    const selectedFileOptionLabel = computed(() => {
+      const selectedPath = targetPath.value || currentPath.value || '';
+      const selectedOption = fileOptions.value.find((option) => option.value === selectedPath);
+      if (selectedOption && selectedOption.label) return selectedOption.label;
+      return selectedPath.split('/').filter(Boolean).pop() || 'MD Activator';
+    });
+    const fileSelectStyle = computed(() => ({
+      '--viewer-file-select-ch': String(Math.min(Math.max(selectedFileOptionLabel.value.length, 8), 32))
+    }));
     const html = ref('');
     const error = ref('');
     const themeOptions = [
@@ -51,7 +55,7 @@ createApp({
       { label: '45 min', value: 2_700_000 },
       { label: '60 min', value: 3_600_000 }
     ];
-    const selectedAutoRefreshMs = ref(10_000);
+    const selectedAutoRefreshMs = ref(3_000);
     const readStoredTheme = () => {
       try {
         return localStorage.getItem('mdViewerTheme') || 'system';
@@ -121,10 +125,27 @@ createApp({
       return payload;
     };
 
+    const buildRenderQuery = ({ path = '', basePath = '', includeFileOptions = true, ifRenderVersion = '' } = {}) => {
+      const params = new URLSearchParams();
+      if (path) params.set('path', path);
+      if (basePath) params.set('base', basePath);
+      if (!includeFileOptions) params.set('includeFileOptions', 'false');
+      if (ifRenderVersion) params.set('ifRenderVersion', ifRenderVersion);
+      return params.toString() ? `?${params.toString()}` : '';
+    };
+
+    const currentRenderVersion = ref('');
+
     const applyRenderPayload = async (payload, options = {}) => {
       currentPath.value = payload.path;
       targetPath.value = payload.path;
-      fileOptions.value = payload.fileOptions || legacyFileOptions(payload.files || []);
+      currentRenderVersion.value = payload.renderVersion || '';
+      const payloadIncludesFileOptions =
+        Object.prototype.hasOwnProperty.call(payload, 'fileOptions') ||
+        Object.prototype.hasOwnProperty.call(payload, 'files');
+      if (payloadIncludesFileOptions) {
+        fileOptions.value = payload.fileOptions || legacyFileOptions(payload.files || []);
+      }
       html.value = payload.html;
       syncUrl(payload.path, options.replaceUrl);
 
@@ -139,15 +160,18 @@ createApp({
       const renderRequestId = ++latestRenderRequestId;
       error.value = '';
       try {
-        const params = new URLSearchParams();
-        if (path) params.set('path', path);
-        if (basePath) params.set('base', basePath);
-        const query = params.toString() ? `?${params.toString()}` : '';
+        const query = buildRenderQuery({
+          path,
+          basePath,
+          includeFileOptions: options.includeFileOptions !== false,
+          ifRenderVersion: options.ifRenderVersion || ''
+        });
 
         const res = await fetch(`/api/render${query}`);
         const payload = await requireApiPayload(res, 'Failed to render markdown');
 
         if (renderRequestId !== latestRenderRequestId) return;
+        if (payload.status === 'no-change') return;
         await applyRenderPayload(payload, options);
       } catch (e) {
         if (renderRequestId !== latestRenderRequestId) return;
@@ -177,13 +201,36 @@ createApp({
     const runAutoRefresh = async () => {
       autoRefreshTimer = null;
       const refreshPath = currentPath.value || targetPath.value;
-      await loadFile(refreshPath, '', { replaceUrl: true });
+      await loadFile(refreshPath, '', {
+        replaceUrl: true,
+        includeFileOptions: false,
+        ifRenderVersion: currentRenderVersion.value
+      });
       scheduleAutoRefresh();
     };
 
     const onFileSelected = (path) => {
       if (!path || path === currentPath.value) return;
       loadFile(path);
+    };
+
+    let latestFileOptionsRequestId = 0;
+
+    const refreshFileOptions = async () => {
+      const fileOptionsRequestId = ++latestFileOptionsRequestId;
+      const refreshPath = currentPath.value || targetPath.value;
+      error.value = '';
+      try {
+        const query = buildRenderQuery({ path: refreshPath, includeFileOptions: true });
+        const res = await fetch(`/api/render${query}`);
+        const payload = await requireApiPayload(res, 'Failed to refresh file options');
+
+        if (fileOptionsRequestId !== latestFileOptionsRequestId) return;
+        fileOptions.value = payload.fileOptions || legacyFileOptions(payload.files || []);
+      } catch (e) {
+        if (fileOptionsRequestId !== latestFileOptionsRequestId) return;
+        error.value = e.message || String(e);
+      }
     };
 
     const isAbsoluteHttpHref = (href) => /^https?:\/\//i.test((href || '').trim());
@@ -388,7 +435,7 @@ createApp({
     return {
       targetPath,
       currentPath,
-      currentFileName,
+      fileSelectStyle,
       fileOptions,
       html,
       error,
@@ -399,6 +446,7 @@ createApp({
       applyTheme,
       loadFile,
       onFileSelected,
+      refreshFileOptions,
       onMarkdownClick,
       onMarkdownChange,
       onMarkdownDoubleClick

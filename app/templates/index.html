@@ -7,7 +7,7 @@
   <link href="/assets/quasar/quasar.prod.css" rel="stylesheet" type="text/css">
   <link href="/assets/quasar-extras/material-icons/material-icons.css" rel="stylesheet" type="text/css">
   <link href="/assets/prismjs/prism.min.css" rel="stylesheet" type="text/css">
-  <link href="/static/style.css" rel="stylesheet" type="text/css">
+  <link href="/static/style.css?v={{ static_asset_version }}" rel="stylesheet" type="text/css">
 </head>
 <body>
   {% raw %}
@@ -16,40 +16,41 @@
       <q-page-container>
         <q-page class="q-pa-md">
           <q-toolbar class="viewer-toolbar viewer-page-toolbar">
-            <q-toolbar-title class="viewer-title">{{ currentFileName }}</q-toolbar-title>
+            <q-select
+              class="viewer-file-select"
+              dense
+              standout
+              options-dense
+              v-model="targetPath"
+              :options="fileOptions"
+              option-label="label"
+              option-value="value"
+              emit-value
+              map-options
+              aria-label="Current folder"
+              :style="fileSelectStyle"
+              @update:model-value="onFileSelected"
+              @popup-show="refreshFileOptions"
+            >
+              <template v-slot:option="scope">
+                <q-item
+                  v-bind="scope.itemProps"
+                  class="viewer-file-option"
+                  :style="{ paddingLeft: (12 + (Number(scope.opt.depth) || 0) * 18) + 'px' }"
+                >
+                  <q-item-section avatar class="viewer-file-option-icon">
+                    <q-icon
+                      :name="scope.opt.kind === 'parent' ? 'drive_folder_upload' : (scope.opt.kind === 'folder' ? 'folder' : 'description')"
+                      size="18px"
+                    />
+                  </q-item-section>
+                  <q-item-section>
+                    <q-item-label>{{ scope.opt.label }}</q-item-label>
+                  </q-item-section>
+                </q-item>
+              </template>
+            </q-select>
             <div class="viewer-controls">
-              <q-select
-                class="viewer-file-select"
-                dense
-                standout
-                options-dense
-                v-model="targetPath"
-                :options="fileOptions"
-                option-label="label"
-                option-value="value"
-                emit-value
-                map-options
-                aria-label="Current folder"
-                @update:model-value="onFileSelected"
-              >
-                <template v-slot:option="scope">
-                  <q-item
-                    v-bind="scope.itemProps"
-                    class="viewer-file-option"
-                    :style="{ paddingLeft: (12 + (Number(scope.opt.depth) || 0) * 18) + 'px' }"
-                  >
-                    <q-item-section avatar class="viewer-file-option-icon">
-                      <q-icon
-                        :name="scope.opt.kind === 'parent' ? 'drive_folder_upload' : (scope.opt.kind === 'folder' ? 'folder' : 'description')"
-                        size="18px"
-                      />
-                    </q-item-section>
-                    <q-item-section>
-                      <q-item-label>{{ scope.opt.label }}</q-item-label>
-                    </q-item-section>
-                  </q-item>
-                </template>
-              </q-select>
               <q-select
                 class="viewer-auto-refresh-select"
                 dense
@@ -91,6 +92,6 @@
   <script src="/assets/quasar/quasar.umd.prod.js"></script>
   <script src="/assets/prismjs/prism.min.js"></script>
   <script src="/assets/mermaid/mermaid.min.js"></script>
-  <script src="/static/app.js"></script>
+  <script src="/static/app.js?v={{ static_asset_version }}"></script>
 </body>
 </html>

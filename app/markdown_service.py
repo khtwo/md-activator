@@ -26,6 +26,7 @@ TWO_SPACE_CHILD_LIST_MARKER_RE = re.compile(
     r"^(?P<indent> {2}(?: {4})*)(?P<marker>(?:[-*+]\s+|\d+[.)]\s+).*)$"
 )
 FENCED_CODE_START_RE = re.compile(r"^(?P<indent>[ \t]{0,3})(?P<fence>`{3,}|~{3,})(?P<info>.*)$")
+BACKTICK_RUN_RE = re.compile(r"`+")
 CODE_LANGUAGE_RE = re.compile(r"^[A-Za-z0-9_+.-]+$")
 MD_LINK_RE = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
 INLINE_MD_PATH_RE = re.compile(r"`(?P<path>(?:[A-Za-z0-9_.-]+[\\/])*[A-Za-z0-9_.-]+\.md)`")
@@ -115,6 +116,7 @@ class MarkdownTableClassExtension(Extension):
 @dataclass
 class RenderResult:
     relative_path: str
+    render_version: str
     html: str
     links: list[str]
     files: list[str]
@@ -219,29 +221,28 @@ class MarkdownRenderer:
         with self._folder_metadata_cache_lock:
             return len(self._folder_metadata_cache)
 
-    def render(self, path: str | None, base: str | None = None) -> RenderResult:
-        md_path = self.resolve_content_path(path=path, base=base)
-        if md_path.is_dir():
-            return self._render_folder(md_path)
-
-        if not md_path.exists() or not md_path.is_file():
-            if md_path.name.lower() == "readme.md" and md_path.parent.is_dir():
-                selected = self._folder_markdown_entrypoint(md_path.parent)
-                if selected:
-                    return self.render(self._to_relative(selected))
-            raise FileNotFoundError(self._markdown_file_not_found_message(md_path))
-        if md_path.suffix.lower() != ".md":
-            raise ValueError("Only .md files and folders are supported")
+    def render(self, path: str | None, base: str | None = None, *, include_file_options: bool = True) -> RenderResult:
+        md_path = self._resolve_render_markdown_file(path=path, base=base)
+        if md_path is None:
+            folder = self.resolve_content_path(path=path, base=base)
+            return self._empty_folder_render(folder, include_file_options=include_file_options)
 
         core = self._render_markdown_file(md_path)
-        folder_metadata = self._folder_metadata(md_path.parent)
+        folder_metadata = self._folder_metadata(md_path.parent) if include_file_options else FolderMetadata([], [])
         return RenderResult(
             relative_path=self._to_relative(md_path),
+            render_version=self._render_version(md_path),
             html=core.html,
             links=list(core.links),
             files=folder_metadata.files,
             file_options=folder_metadata.file_options,
         )
+
+    def current_render_version(self, path: str | None, base: str | None = None) -> str | None:
+        md_path = self._resolve_render_markdown_file(path=path, base=base)
+        if md_path is None:
+            return None
+        return self._render_version(md_path)
 
     def clean_render_cache(self) -> None:
         now = self._clock()
@@ -298,6 +299,9 @@ class MarkdownRenderer:
         core = self._render_markdown_core(md_path)
         self._store_render_core(md_path, mtime_ns, core)
         return core
+
+    def _render_version(self, md_path: Path) -> str:
+        return f"{self._to_relative(md_path)}:{md_path.stat().st_mtime_ns}"
 
     def _render_markdown_core(self, md_path: Path) -> RenderCoreResult:
         text = md_path.read_text(encoding="utf-8")
@@ -499,7 +503,7 @@ class MarkdownRenderer:
             nonlocal marker_count
             replacement = match.group(0)
             if marker_count == index:
-                replacement = "[x]" if checked else "[ ]"
+                replacement = "[x]" if checked else "[]"
             marker_count += 1
             return replacement
 
@@ -548,6 +552,16 @@ class MarkdownRenderer:
                 continue
 
             if cursor + 1 == line and block_index == index:
+                if match.group("fence").startswith("`"):
+                    replacement_fence = self._backtick_fence_for_content(content)
+                    lines[cursor] = (
+                        f"{match.group('indent')}{replacement_fence}{match.group('info')}"
+                        f"{self._line_ending(lines[cursor])}"
+                    )
+                    lines[closing_index] = (
+                        f"{self._fence_line_indent(lines[closing_index])}{replacement_fence}"
+                        f"{self._line_ending(lines[closing_index])}"
+                    )
                 lines[cursor + 1 : closing_index] = self._content_lines(content, lines)
                 md_path.write_text("".join(lines), encoding="utf-8")
                 self.invalidate_render_cache(md_path)
@@ -588,19 +602,36 @@ class MarkdownRenderer:
     def _markdown_file_not_found_message(self, path: Path) -> str:
         return f"Markdown file not found: {self._to_relative(path)}"
 
-    def _render_folder(self, folder: Path) -> RenderResult:
+    def _render_folder(self, folder: Path, *, include_file_options: bool = True) -> RenderResult:
         selected = self._folder_markdown_entrypoint(folder)
         if selected:
-            return self.render(self._to_relative(selected))
+            return self.render(self._to_relative(selected), include_file_options=include_file_options)
 
-        folder_metadata = self._folder_metadata(folder)
+        return self._empty_folder_render(folder, include_file_options=include_file_options)
+
+    def _empty_folder_render(self, folder: Path, *, include_file_options: bool = True) -> RenderResult:
+        folder_metadata = self._folder_metadata(folder) if include_file_options else FolderMetadata([], [])
         return RenderResult(
             relative_path=self._to_relative(folder),
+            render_version="",
             html=NO_MARKDOWN_FOUND_HTML,
             links=[],
             files=folder_metadata.files,
             file_options=folder_metadata.file_options,
         )
+
+    def _resolve_render_markdown_file(self, path: str | None, base: str | None = None) -> Path | None:
+        content_path = self.resolve_content_path(path=path, base=base)
+        if content_path.is_dir():
+            return self._folder_markdown_entrypoint(content_path)
+
+        if not content_path.exists() or not content_path.is_file():
+            if content_path.name.lower() == "readme.md" and content_path.parent.is_dir():
+                return self._folder_markdown_entrypoint(content_path.parent)
+            raise FileNotFoundError(self._markdown_file_not_found_message(content_path))
+        if content_path.suffix.lower() != ".md":
+            raise ValueError("Only .md files and folders are supported")
+        return content_path
 
     def _folder_markdown_entrypoint(self, folder: Path) -> Path | None:
         immediate_md_files = sorted(
@@ -939,6 +970,21 @@ class MarkdownRenderer:
 
     def _line_text(self, line: str) -> str:
         return line.rstrip("\r\n")
+
+    def _line_ending(self, line: str) -> str:
+        if line.endswith("\r\n"):
+            return "\r\n"
+        if line.endswith("\n"):
+            return "\n"
+        return ""
+
+    def _fence_line_indent(self, line: str) -> str:
+        match = re.match(r"^[ \t]{0,3}", self._line_text(line))
+        return match.group(0) if match else ""
+
+    def _backtick_fence_for_content(self, content: str) -> str:
+        longest_run = max((len(match.group(0)) for match in BACKTICK_RUN_RE.finditer(content)), default=0)
+        return "`" * max(3, longest_run + 1)
 
     def _content_lines(self, content: str, existing_lines: list[str]) -> list[str]:
         line_ending = self._preferred_line_ending(existing_lines)

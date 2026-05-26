@@ -28,6 +28,7 @@ def resolve_content_root(root_arg: str | None = None) -> Path:
 CONTENT_ROOT = resolve_content_root()
 SAVE_PERMISSION_ERROR_DETAIL = "Unable to save markdown file: permission denied"
 RENDER_CACHE_CLEAN_INTERVAL_SECONDS = 10.0
+LOCAL_STATIC_FILES = ("style.css", "app.js")
 
 renderer = MarkdownRenderer(CONTENT_ROOT)
 
@@ -65,6 +66,11 @@ def configure_content_root(root: Path) -> Path:
     renderer.root_dir = root
     os.environ["MD_VIEWER_ROOT"] = str(root)
     return root
+
+
+def local_static_asset_version() -> str:
+    static_dir = APP_ROOT / "app" / "static"
+    return str(max((static_dir / name).stat().st_mtime_ns for name in LOCAL_STATIC_FILES))
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
@@ -120,7 +126,14 @@ class CodeBlockUpdateRequest(BaseModel):
 
 
 def viewer_response(request: Request) -> HTMLResponse:
-    return templates.TemplateResponse(request, "index.html", {"content_root": str(renderer.root_dir)})
+    return templates.TemplateResponse(
+        request,
+        "index.html",
+        {
+            "content_root": str(renderer.root_dir),
+            "static_asset_version": local_static_asset_version(),
+        },
+    )
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -132,16 +145,34 @@ def index(request: Request) -> HTMLResponse:
 def render_markdown(
     path: str | None = Query(default=None, description="Relative path to markdown file"),
     base: str | None = Query(default=None, description="Current markdown path for resolving relative links"),
+    include_file_options: bool = Query(
+        default=True,
+        alias="includeFileOptions",
+        description="Include file/folder dropdown metadata in the render response.",
+    ),
+    if_render_version: str | None = Query(
+        default=None,
+        alias="ifRenderVersion",
+        description="Return a no-change signal when this token matches the current markdown file version.",
+    ),
 ) -> dict:
     try:
-        result = renderer.render(path=path, base=base)
-        return {
+        if if_render_version:
+            current_render_version = renderer.current_render_version(path=path, base=base)
+            if current_render_version and current_render_version == if_render_version:
+                return {"status": "no-change"}
+
+        result = renderer.render(path=path, base=base, include_file_options=include_file_options)
+        payload = {
             "path": result.relative_path,
+            "renderVersion": result.render_version,
             "html": result.html,
             "links": result.links,
-            "files": result.files,
-            "fileOptions": result.file_options,
         }
+        if include_file_options:
+            payload["files"] = result.files
+            payload["fileOptions"] = result.file_options
+        return payload
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
