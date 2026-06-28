@@ -1,0 +1,135 @@
+.markdown-body .mermaid-viewport {
+  cursor: grab;
+  overflow: hidden;
+  touch-action: none;
+}
+
+.markdown-body .mermaid-viewport.mermaid-panning {
+  cursor: grabbing;
+}
+
+.markdown-body .mermaid-pan {
+  transform-origin: 0 0;
+}
+
+.markdown-body .mermaid-node-editable {
+  cursor: pointer;
+}
+
+.markdown-body .mermaid-node.mermaid-node-saving {
+  cursor: progress;
+}
+
+.markdown-body .mermaid-node.mermaid-node-title-editing {
+  cursor: text;
+}
+
+.markdown-body .mermaid-edge-editable {
+  cursor: pointer;
+}
+
+.markdown-body .mermaid-edge-title-editing {
+  cursor: text;
+}
+
+.markdown-body .mermaid-node-title-editor-foreign,
+.markdown-body .mermaid-edge-title-editor-foreign {
+  overflow: visible;
+}
+
+.markdown-body .mermaid-node-title-editor,
+.markdown-body .mermaid-edge-title-editor {
+  background: #ffffff;
+  border: 1px solid #64748b;
+  border-radius: 4px;
+  box-sizing: border-box;
+  color: #1f2937;
+  font: 600 13px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  height: 100%;
+  line-height: 1.2;
+  outline: none;
+  overflow: auto;
+  padding: 2px 4px;
+  resize: none;
+  text-align: center;
+  width: 100%;
+}
+
+.markdown-body .mermaid-node-title-editor:focus,
+.markdown-body .mermaid-edge-title-editor:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.18);
+}
+
+body.body--dark .markdown-body .mermaid-node-title-editor,
+body.body--dark .markdown-body .mermaid-edge-title-editor {
+  background: #111827;
+  border-color: #94a3b8;
+  color: #e8edf4;
+}
+
+/* Inline diagram error / auto-repair notice shown in place of a broken mermaid block. */
+.markdown-body .mermaid-unrendered {
+  display: none;
+}
+
+.markdown-body .mermaid-repair-box {
+  background: #fffbeb;
+  border: 1px solid #f59e0b;
+  border-radius: 6px;
+  color: #78350f;
+  font: 13px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  margin: 8px 0;
+  padding: 10px 12px;
+}
+
+.markdown-body .mermaid-repair-box.mermaid-repair-unfixable {
+  background: #fef2f2;
+  border-color: #ef4444;
+  color: #7f1d1d;
+}
+
+.markdown-body .mermaid-repair-heading {
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.markdown-body .mermaid-repair-issues {
+  margin: 0 0 8px;
+  padding-left: 18px;
+}
+
+.markdown-body .mermaid-repair-issue {
+  margin: 2px 0;
+}
+
+.markdown-body .mermaid-repair-quick-fix {
+  background: #2563eb;
+  border: none;
+  border-radius: 4px;
+  color: #ffffff;
+  cursor: pointer;
+  font: 600 13px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  padding: 4px 12px;
+}
+
+.markdown-body .mermaid-repair-quick-fix:hover {
+  background: #1d4ed8;
+}
+
+.markdown-body .mermaid-repair-quick-fix:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+body.body--dark .markdown-body .mermaid-repair-box {
+  background: #2a2410;
+  border-color: #b97e0a;
+  color: #fcd9a3;
+}
+
+body.body--dark .markdown-body .mermaid-repair-box.mermaid-repair-unfixable {
+  background: #2a1414;
+  border-color: #b91c1c;
+  color: #f7b4b4;
+}

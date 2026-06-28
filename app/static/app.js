@@ -1,22 +1,9 @@
 const { createApp, ref, computed, nextTick, watch } = Vue;
 
-if (window.mermaid) {
-  mermaid.initialize({ startOnLoad: false });
-}
+if (window.mermaid) mermaid.initialize({ startOnLoad: false });
 
 createApp({
   setup() {
-    const getPathFromUrl = () => {
-      const directPath = window.location.pathname.replace(/^\/+/, '');
-      const legacyPath = new URLSearchParams(window.location.search).get('path') || '';
-      if (!directPath) return legacyPath;
-
-      try {
-        return decodeURIComponent(directPath);
-      } catch {
-        return directPath;
-      }
-    };
     const targetPath = ref(getPathFromUrl());
     const currentPath = ref('');
     const fileOptions = ref([]);
@@ -31,48 +18,10 @@ createApp({
     }));
     const html = ref('');
     const error = ref('');
-    const themeOptions = [
-      { label: 'System', value: 'system' },
-      { label: 'Light', value: 'light' },
-      { label: 'Dark', value: 'dark' }
-    ];
-    const autoRefreshOptions = [
-      { label: '1 sec', value: 1_000 },
-      { label: '2 sec', value: 2_000 },
-      { label: '3 sec', value: 3_000 },
-      { label: '5 sec', value: 5_000 },
-      { label: '10 sec', value: 10_000 },
-      { label: '20 sec', value: 20_000 },
-      { label: '30 sec', value: 30_000 },
-      { label: '45 sec', value: 45_000 },
-      { label: '1 min', value: 60_000 },
-      { label: '2 min', value: 120_000 },
-      { label: '3 min', value: 180_000 },
-      { label: '5 min', value: 300_000 },
-      { label: '10 min', value: 600_000 },
-      { label: '20 min', value: 1_200_000 },
-      { label: '30 min', value: 1_800_000 },
-      { label: '45 min', value: 2_700_000 },
-      { label: '60 min', value: 3_600_000 }
-    ];
     const selectedAutoRefreshMs = ref(3_000);
-    const readStoredTheme = () => {
-      try {
-        return localStorage.getItem('mdViewerTheme') || 'system';
-      } catch {
-        return 'system';
-      }
-    };
     const selectedTheme = ref(readStoredTheme());
-    const systemThemeQuery = window.matchMedia
-      ? window.matchMedia('(prefers-color-scheme: dark)')
-      : null;
 
-    const getEffectiveDark = (theme) => {
-      if (theme === 'dark') return true;
-      if (theme === 'light') return false;
-      return systemThemeQuery ? systemThemeQuery.matches : false;
-    };
+    const nav = createBrowserNavigation({ ref, computed });
 
     const applyTheme = (theme) => {
       const normalizedTheme = ['system', 'light', 'dark'].includes(theme) ? theme : 'system';
@@ -85,80 +34,197 @@ createApp({
       }
     };
 
-    const legacyFileOptions = (files) => {
-      const folderPrefix = '> ';
-      return files.map((path) => {
-        if (path.startsWith(folderPrefix)) {
-          const folderPath = path.slice(folderPrefix.length);
-          return { label: folderPath, value: folderPath, kind: 'folder', hasMarkdown: true, depth: 0 };
-        }
-        return { label: path, value: path, kind: 'file', hasMarkdown: true, depth: 0 };
-      });
-    };
-
-    const syncUrl = (path, replace = false) => {
-      const nextUrl = `/${encodeURI(path)}`;
-      const currentUrl = `${window.location.pathname}${window.location.search}`;
-      if (nextUrl === currentUrl) return;
-
-      const method = replace ? 'replaceState' : 'pushState';
-      window.history[method]({ path }, '', nextUrl);
-    };
-
-    const readApiPayload = async (res, fallbackMessage) => {
-      const contentType = res.headers.get('content-type') || '';
-      if (contentType.includes('application/json')) {
-        try {
-          return await res.json();
-        } catch {
-          return { detail: fallbackMessage };
-        }
-      }
-
-      const text = await res.text();
-      return { detail: text || fallbackMessage };
-    };
-
-    const requireApiPayload = async (res, fallbackMessage) => {
-      const payload = await readApiPayload(res, fallbackMessage);
-      if (!res.ok) throw new Error(payload.detail || fallbackMessage);
-      return payload;
-    };
-
-    const buildRenderQuery = ({ path = '', basePath = '', includeFileOptions = true, ifRenderVersion = '' } = {}) => {
-      const params = new URLSearchParams();
-      if (path) params.set('path', path);
-      if (basePath) params.set('base', basePath);
-      if (!includeFileOptions) params.set('includeFileOptions', 'false');
-      if (ifRenderVersion) params.set('ifRenderVersion', ifRenderVersion);
-      return params.toString() ? `?${params.toString()}` : '';
-    };
-
     const currentRenderVersion = ref('');
+    const maxGraphEditHistory = createMaxGraphEditHistory();
+    let maxGraphHistorySaveInProgress = false;
+
+    // loadFile/showError are referenced lazily so this can be created before they are declared.
+    const { updateMermaidNodeTitle, applyMermaidHistoryEdit, updateMermaidEdgeTitle, applyMermaidEdgeHistoryEdit } =
+      createMermaidTitleEditor({
+        getPath: () => currentPath.value, history: maxGraphEditHistory,
+        saveMermaidNodeTitle, saveMermaidEdgeTitle,
+        loadFile: (path, base, options) => loadFile(path, base, options), showError: (e) => showError(e)
+      });
+    const maxGraphAdd = createMaxGraphAddController({ getPath: () => currentPath.value, history: maxGraphEditHistory, loadFile: (path, base, options) => loadFile(path, base, options), showError: (e) => showError(e) });
+
+    const updateMaxGraphNodePosition = async ({ diagram, node, nodeId, previousX, previousY, x, y }) => {
+      node.classList.add('maxgraph-node-saving');
+      const edit = {
+        kind: 'node-position',
+        path: currentPath.value,
+        line: Number(diagram.dataset.maxgraphLine),
+        index: Number(diagram.dataset.maxgraphIndex),
+        nodeId,
+        previousX,
+        previousY,
+        x,
+        y
+      };
+
+      try {
+        await saveMaxGraphNodePosition(edit);
+        maxGraphEditHistory.record(edit);
+        await loadFile(currentPath.value, '', { replaceUrl: true });
+      } catch (e) {
+        node.classList.remove('maxgraph-node-saving');
+        showError(e);
+        throw e;
+      }
+    };
+
+    const updateMaxGraphNodeTitle = async ({ diagram, node, nodeId, previousTitle, title }) => {
+      node.classList.add('maxgraph-node-saving');
+      const edit = {
+        kind: 'node-title',
+        path: currentPath.value,
+        line: Number(diagram.dataset.maxgraphLine),
+        index: Number(diagram.dataset.maxgraphIndex),
+        nodeId,
+        previousTitle,
+        title
+      };
+      try {
+        await saveMaxGraphNodeTitle(edit);
+        maxGraphEditHistory.record(edit);
+        await loadFile(currentPath.value, '', { replaceUrl: true });
+      } catch (e) {
+        showError(e);
+        throw e;
+      } finally { // runs on success too: a no-op reload (same value) won't re-render to clear it
+        node.classList.remove('maxgraph-node-saving');
+      }
+    };
+
+    const updateMaxGraphEdgeTitle = async ({ diagram, label, edgeId, previousTitle, title }) => {
+      label.classList.add('maxgraph-edge-label-saving');
+      const edit = {
+        kind: 'edge-title',
+        path: currentPath.value,
+        line: Number(diagram.dataset.maxgraphLine),
+        index: Number(diagram.dataset.maxgraphIndex),
+        edgeId,
+        previousTitle,
+        title
+      };
+      try {
+        await saveMaxGraphEdgeTitle(edit);
+        maxGraphEditHistory.record(edit);
+        await loadFile(currentPath.value, '', { replaceUrl: true });
+      } catch (e) {
+        showError(e);
+        throw e;
+      } finally { // runs on success too: a no-op reload (same value) won't re-render to clear it
+        label.classList.remove('maxgraph-edge-label-saving');
+      }
+    };
+
+    const applyMaxGraphHistoryEdit = async (edit, direction) => {
+      if (!edit || maxGraphHistorySaveInProgress) return false;
+      maxGraphHistorySaveInProgress = true;
+
+      try {
+        let payload;
+        if (edit.kind === 'node-position') {
+          payload = await saveMaxGraphNodePosition({
+            path: edit.path,
+            line: edit.line,
+            index: edit.index,
+            nodeId: edit.nodeId,
+            x: direction === 'undo' ? edit.previousX : edit.x,
+            y: direction === 'undo' ? edit.previousY : edit.y
+          });
+        } else if (edit.kind === 'node-title') {
+          payload = await saveMaxGraphNodeTitle({
+            path: edit.path,
+            line: edit.line,
+            index: edit.index,
+            nodeId: edit.nodeId,
+            title: direction === 'undo' ? edit.previousTitle : edit.title
+          });
+        } else if (edit.kind === 'edge-title') {
+          payload = await saveMaxGraphEdgeTitle({
+            path: edit.path,
+            line: edit.line,
+            index: edit.index,
+            edgeId: edit.edgeId,
+            title: direction === 'undo' ? edit.previousTitle : edit.title
+          });
+        } else if (edit.kind === 'mermaid-node-title') {
+          payload = await applyMermaidHistoryEdit(edit, direction);
+        } else if (edit.kind === 'mermaid-edge-title') {
+          payload = await applyMermaidEdgeHistoryEdit(edit, direction);
+        } else if (!(payload = await maxGraphAdd.applyHistoryEdit(edit, direction))) {
+          return false; // node-add / edge-add: undo deletes, redo re-adds; null = unhandled.
+        }
+        await loadFile(payload.path || edit.path, '', { replaceUrl: true });
+        return true;
+      } catch (e) {
+        showError(e);
+        return false;
+      } finally {
+        maxGraphHistorySaveInProgress = false;
+      }
+    };
+
+    const undoMaxGraphEdit = async () => {
+      const edit = maxGraphEditHistory.peekUndo();
+      if (await applyMaxGraphHistoryEdit(edit, 'undo')) {
+        maxGraphEditHistory.commitUndo();
+      }
+    };
+
+    const redoMaxGraphEdit = async () => {
+      const edit = maxGraphEditHistory.peekRedo();
+      if (await applyMaxGraphHistoryEdit(edit, 'redo')) {
+        maxGraphEditHistory.commitRedo();
+      }
+    };
+
+    const onGlobalKeyDown = async (event) => {
+      if (event.defaultPrevented || isTextEditingElement(event.target)) return;
+      if (handleHistoryNavKey(event, nav.goBack, nav.goForward)) return;
+      if (!event.ctrlKey || event.altKey || event.metaKey) return;
+
+      const key = event.key.toLowerCase();
+      if (key === 'z' && !event.shiftKey) {
+        event.preventDefault();
+        await undoMaxGraphEdit();
+      } else if (key === 'y' && !event.shiftKey) {
+        event.preventDefault();
+        await redoMaxGraphEdit();
+      }
+    };
 
     const applyRenderPayload = async (payload, options = {}) => {
-      currentPath.value = payload.path;
+      if (payload.path !== currentPath.value) clearError(); // hide stale error banner when switching pages
+      currentPath.value = payload.path; applyViewerTitle(payload.path);
       targetPath.value = payload.path;
       currentRenderVersion.value = payload.renderVersion || '';
-      const payloadIncludesFileOptions =
-        Object.prototype.hasOwnProperty.call(payload, 'fileOptions') ||
-        Object.prototype.hasOwnProperty.call(payload, 'files');
-      if (payloadIncludesFileOptions) {
-        fileOptions.value = payload.fileOptions || legacyFileOptions(payload.files || []);
+      if (Object.prototype.hasOwnProperty.call(payload, 'fileOptions')) {
+        fileOptions.value = payload.fileOptions || [];
       }
       html.value = payload.html;
-      syncUrl(payload.path, options.replaceUrl);
+      nav.syncUrl(payload.path, options.replaceUrl);
 
       await nextTick();
-      if (window.Prism) Prism.highlightAll();
-      if (window.mermaid) await mermaid.run({ querySelector: '.mermaid' });
+      if (window.Prism) Prism.highlightAll(); renderMaxGraphDiagrams(updateMaxGraphNodePosition, updateMaxGraphNodeTitle, updateMaxGraphEdgeTitle, maxGraphAdd.addNode, maxGraphAdd.addEdge, maxGraphAdd.deleteNode, maxGraphAdd.deleteEdge, maxGraphAdd.moveNodes, maxGraphAdd.deleteNodes);
+      if (window.mermaid) await runMermaidWithRepair({
+        getPath: () => currentPath.value, loadFile: (p, b, o) => loadFile(p, b, o), showError: (e) => showError(e)
+      });
+      setupMermaidZoomPan();
+      bindMermaidDiagramTitles(updateMermaidNodeTitle, updateMermaidEdgeTitle);
     };
 
     let latestRenderRequestId = 0;
+    const { showMissingUrlError, showError, clearError, clearTransientError } = createPersistentErrorController(error);
+
+    const loadRootAfterMissingUrlFile = async (missingPath) => {
+      await loadFile('', '', { replaceUrl: true, missingUrlFallback: false });
+      showMissingUrlError(missingPath);
+    };
 
     const loadFile = async (path, basePath = '', options = {}) => {
       const renderRequestId = ++latestRenderRequestId;
-      error.value = '';
       try {
         const query = buildRenderQuery({
           path,
@@ -171,26 +237,21 @@ createApp({
         const payload = await requireApiPayload(res, 'Failed to render markdown');
 
         if (renderRequestId !== latestRenderRequestId) return;
+        clearTransientError(); // recovered fetch: hide a stale transient banner (runs before the no-change return)
         if (payload.status === 'no-change') return;
         await applyRenderPayload(payload, options);
       } catch (e) {
         if (renderRequestId !== latestRenderRequestId) return;
-        error.value = e.message || String(e);
+        const missingPath = options.missingUrlFallback === true ? getMissingFilePathFromError(e) : '';
+        if (missingPath) {
+          await loadRootAfterMissingUrlFile(missingPath);
+          return;
+        }
+        showError(e, { transient: true }); // failed render fetch is transient — a later success clears it
       }
     };
 
     let autoRefreshTimer = null;
-
-    const getMillisecondsSinceLocalMidnight = (now = new Date()) => {
-      const localMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      return now.getTime() - localMidnight.getTime();
-    };
-
-    const getNextAutoRefreshDelay = (intervalMs, now = new Date()) => {
-      const elapsedSinceLocalMidnight = getMillisecondsSinceLocalMidnight(now);
-      const remainder = elapsedSinceLocalMidnight % intervalMs;
-      return remainder === 0 ? intervalMs : intervalMs - remainder;
-    };
 
     const scheduleAutoRefresh = () => {
       if (autoRefreshTimer !== null) window.clearTimeout(autoRefreshTimer);
@@ -219,45 +280,29 @@ createApp({
     const refreshFileOptions = async () => {
       const fileOptionsRequestId = ++latestFileOptionsRequestId;
       const refreshPath = currentPath.value || targetPath.value;
-      error.value = '';
       try {
         const query = buildRenderQuery({ path: refreshPath, includeFileOptions: true });
         const res = await fetch(`/api/render${query}`);
         const payload = await requireApiPayload(res, 'Failed to refresh file options');
 
         if (fileOptionsRequestId !== latestFileOptionsRequestId) return;
-        fileOptions.value = payload.fileOptions || legacyFileOptions(payload.files || []);
+        clearTransientError(); fileOptions.value = payload.fileOptions || []; // a successful refresh also recovers connectivity
       } catch (e) {
         if (fileOptionsRequestId !== latestFileOptionsRequestId) return;
-        error.value = e.message || String(e);
+        showError(e, { transient: true });
       }
-    };
-
-    const isAbsoluteHttpHref = (href) => /^https?:\/\//i.test((href || '').trim());
-
-    const isLocalMarkdownHref = (href) => {
-      if (!href) return false;
-      if (isAbsoluteHttpHref(href)) return false;
-
-      let url;
-      try {
-        url = new URL(href, window.location.href);
-      } catch {
-        return false;
-      }
-
-      if (url.origin !== window.location.origin) return false;
-      return url.pathname.toLowerCase().endsWith('.md');
     };
 
     const onMarkdownClick = (event) => {
+      if (handleYamlToggleClick(event)) return;
+      if (handleJsonToggleClick(event)) return;
       const optionButton = event.target.closest('button.checkbox-option-button[data-checkbox-line][data-checkbox-index]');
       if (optionButton) {
         updateCheckboxMarker({
           element: optionButton,
           line: Number(optionButton.dataset.checkboxLine),
           index: Number(optionButton.dataset.checkboxIndex),
-          checked: optionButton.dataset.checkboxChecked !== 'true'
+          checked: optionButton.dataset.checkboxSingle === 'true' ? true : optionButton.dataset.checkboxChecked !== 'true'
         });
         return;
       }
@@ -273,7 +318,6 @@ createApp({
 
     const updateCheckboxMarker = async ({ element, line, index, checked, revert }) => {
       element.disabled = true;
-      error.value = '';
 
       try {
         const res = await fetch('/api/checkbox', {
@@ -292,12 +336,12 @@ createApp({
       } catch (e) {
         if (revert) revert();
         element.disabled = false;
-        error.value = e.message || String(e);
+        showError(e);
       }
     };
 
     const onMarkdownChange = async (event) => {
-      const checkbox = event.target.closest("input[type='checkbox'][data-checkbox-line][data-checkbox-index]");
+      const checkbox = event.target.closest('input[type="checkbox"][data-checkbox-line][data-checkbox-index], input[type="radio"][data-checkbox-line][data-checkbox-index]');
       if (!checkbox) return;
 
       const previousChecked = !checkbox.checked;
@@ -385,7 +429,6 @@ createApp({
         }
 
         editor.disabled = true;
-        error.value = '';
 
         try {
           const res = await fetch('/api/code-block', {
@@ -405,7 +448,7 @@ createApp({
           saveStarted = false;
           editor.disabled = false;
           bindEditorSave();
-          error.value = e.message || String(e);
+          showError(e);
           editor.focus();
         }
       };
@@ -417,22 +460,23 @@ createApp({
       editor.setSelectionRange(editor.value.length, editor.value.length);
     };
 
-    window.addEventListener('popstate', () => {
-      loadFile(getPathFromUrl(), '', { replaceUrl: true });
+    window.addEventListener('popstate', (event) => {
+      nav.adoptHistoryState(event.state);
+      loadFile(getPathFromUrl(), '', { replaceUrl: true, missingUrlFallback: true });
     });
+    window.addEventListener('keydown', onGlobalKeyDown);
     if (systemThemeQuery) {
       systemThemeQuery.addEventListener('change', () => {
         if (selectedTheme.value === 'system') applyTheme('system');
       });
     }
 
-    watch(selectedTheme, applyTheme);
-    watch(selectedAutoRefreshMs, scheduleAutoRefresh);
-    applyTheme(selectedTheme.value);
-    loadFile(targetPath.value, '', { replaceUrl: true });
-    scheduleAutoRefresh();
-
-    return {
+    watch(selectedTheme, applyTheme); watch(selectedAutoRefreshMs, scheduleAutoRefresh);
+    applyTheme(selectedTheme.value); loadFile(targetPath.value, '', { replaceUrl: true, missingUrlFallback: true });
+    scheduleAutoRefresh(); initContentSearch(window);
+    const newFilesController = createNewFilesController({ ref, computed, loadFile });
+    newFilesController.startNewFilesPolling();
+    return { ...newFilesController, ...createFileDropdownCollapse({ fileOptions, ref, computed, getDropdownScrollEl: () => findDropdownScrollEl(), restoreDropdownScroll: createScrollRestorer({ nextTick, requestAnimationFrame: typeof requestAnimationFrame === 'function' ? requestAnimationFrame : null }) }), ...nav, ...createContentFontScale({ ref, computed }),
       targetPath,
       currentPath,
       fileSelectStyle,

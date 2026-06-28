@@ -2,6 +2,11 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const DIRECTORIES = ["app", "to-html"];
+const REQUIRED_RUNTIME_PATHS = [
+  "app/main.py",
+  "app/markdown_service.py",
+  "app/markdown_services/__init__.py",
+];
 const FILES = [
   "pyproject.toml",
   "uv.lock",
@@ -25,7 +30,9 @@ function copyDirectory(source, destination) {
     recursive: true,
     filter: (sourcePath) => {
       const name = path.basename(sourcePath);
-      return name !== "__pycache__" && !sourcePath.endsWith(".pyc");
+      // Skip Python caches and the graphify-out knowledge-graph cache (a dev artifact under
+      // app/) so they never reach the staged server payload / VSIX.
+      return name !== "__pycache__" && name !== "graphify-out" && !sourcePath.endsWith(".pyc");
     },
   });
 }
@@ -45,6 +52,10 @@ function stageServer({ repoRoot, extensionRoot }) {
   const serverRoot = path.join(extensionRoot, "server");
   removeDirectory(serverRoot);
   ensureDirectory(serverRoot);
+
+  for (const runtimePath of REQUIRED_RUNTIME_PATHS) {
+    requireExisting(path.join(repoRoot, runtimePath));
+  }
 
   for (const directory of DIRECTORIES) {
     const source = path.join(repoRoot, directory);

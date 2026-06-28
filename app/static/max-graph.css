@@ -1,0 +1,285 @@
+body.body--dark .markdown-body .maxgraph-diagram {
+  background: #151a21;
+  border-color: #303844;
+  color: #e8edf4;
+}
+
+body.body--dark .markdown-body .maxgraph-node-shape {
+  fill: #374151;
+  stroke: #94a3b8;
+}
+
+body.body--dark .markdown-body .maxgraph-edge {
+  fill: none;
+  stroke: #b9c4d1;
+}
+
+body.body--dark .markdown-body .maxgraph-edge-arrow {
+  fill: #b9c4d1;
+  stroke: #b9c4d1;
+}
+
+body.body--dark .markdown-body .maxgraph-node-label {
+  fill: #e8edf4;
+}
+
+body.body--dark .markdown-body .maxgraph-node-title-editor,
+body.body--dark .markdown-body .maxgraph-edge-title-editor {
+  background: #111827;
+  border-color: #94a3b8;
+  color: #e8edf4;
+}
+
+body.body--dark .markdown-body .maxgraph-edge-label-text {
+  fill: #d8e2ee;
+}
+
+body.body--dark .markdown-body .maxgraph-diagram-error {
+  background: #3a2530;
+  border-color: #7f3f54;
+  color: #ffd7df;
+}
+
+body.body--dark .markdown-body .maxgraph-selection-box {
+  fill: rgba(96, 165, 250, 0.18);
+  stroke: #60a5fa;
+}
+
+body.body--dark .markdown-body .maxgraph-node.maxgraph-node-selected .maxgraph-node-shape {
+  stroke: #60a5fa;
+}
+
+.markdown-body .maxgraph-diagram {
+  background: #f8fafc;
+  border: 1px solid #d8e0ea;
+  border-radius: 8px;
+  box-sizing: border-box;
+  cursor: grab;
+  margin: 1rem 0 1.25rem;
+  overflow: hidden;
+  padding: 16px;
+  position: relative;
+  touch-action: none;
+}
+
+.markdown-body .maxgraph-diagram.maxgraph-adding-edge,
+.markdown-body .maxgraph-diagram.maxgraph-adding-edge .maxgraph-node {
+  cursor: crosshair;
+}
+
+/* The first node picked while adding an edge, awaiting the second click. */
+.markdown-body .maxgraph-node.maxgraph-node-edge-source .maxgraph-node-shape {
+  stroke: #2563eb;
+  stroke-width: 2.5;
+}
+
+/* Delete mode: the next click on a node or an edge removes it. The crosshair cursor (matching
+   add-edge mode) signals that a click selects a target. */
+.markdown-body .maxgraph-diagram.maxgraph-deleting,
+.markdown-body .maxgraph-diagram.maxgraph-deleting .maxgraph-node {
+  cursor: crosshair;
+}
+
+/* A wide transparent hit target laid over each edge. It is inert in normal use; only in delete
+   mode does its stroke become a pointer target, so the thin connector line is easy to click
+   without widening the visible stroke (whose arrow markers scale with stroke-width). */
+.markdown-body .maxgraph-edge-hit {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 14;
+  pointer-events: none;
+}
+
+.markdown-body .maxgraph-diagram.maxgraph-deleting .maxgraph-edge-hit {
+  cursor: crosshair;
+  pointer-events: stroke;
+}
+
+.markdown-body .maxgraph-diagram.maxgraph-panning {
+  cursor: grabbing;
+}
+
+/* Multi-select: while Shift is held the canvas is in rubber-band marquee mode (crosshair),
+   matching the add-edge/delete crosshair affordance. */
+.markdown-body .maxgraph-diagram.maxgraph-marquee-ready,
+.markdown-body .maxgraph-diagram.maxgraph-marquee-ready .maxgraph-node {
+  cursor: crosshair;
+}
+
+/* The rubber-band selection rectangle drawn during a Shift-drag. Inert to the pointer so it never
+   intercepts the drag it is visualizing. */
+.markdown-body .maxgraph-selection-box {
+  fill: rgba(37, 99, 235, 0.12);
+  stroke: #2563eb;
+  stroke-width: 1;
+  stroke-dasharray: 4 3;
+  pointer-events: none;
+}
+
+/* A node that is part of the current multi-selection. */
+.markdown-body .maxgraph-node.maxgraph-node-selected .maxgraph-node-shape {
+  stroke: #2563eb;
+  stroke-width: 2.5;
+}
+
+.markdown-body .maxgraph-diagram-canvas {
+  transform-origin: 0 0;
+}
+
+.markdown-body .maxgraph-diagram svg {
+  display: block;
+  height: auto;
+  max-width: 100%;
+  min-width: 240px;
+}
+
+.markdown-body .maxgraph-node-shape {
+  fill: #ffffff;
+  stroke: #64748b;
+  stroke-width: 1.5;
+}
+
+.markdown-body .maxgraph-node {
+  cursor: grab;
+}
+
+.markdown-body .maxgraph-node.maxgraph-node-dragging,
+.markdown-body .maxgraph-node.maxgraph-node-saving {
+  cursor: grabbing;
+}
+
+.markdown-body .maxgraph-node.maxgraph-node-title-editing,
+.markdown-body .maxgraph-edge-label.maxgraph-edge-title-editing {
+  cursor: text;
+}
+
+.markdown-body .maxgraph-node-title-editor-foreign,
+.markdown-body .maxgraph-edge-title-editor-foreign {
+  overflow: visible;
+}
+
+.markdown-body .maxgraph-node-title-editor,
+.markdown-body .maxgraph-edge-title-editor {
+  background: #ffffff;
+  border: 1px solid #64748b;
+  border-radius: 4px;
+  box-sizing: border-box;
+  color: #1f2937;
+  font: 600 13px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  height: 100%;
+  line-height: 1.2;
+  outline: none;
+  overflow: auto;
+  padding: 2px 4px;
+  resize: none;
+  text-align: center;
+  width: 100%;
+}
+
+.markdown-body .maxgraph-node-title-editor:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.18);
+}
+
+.markdown-body .maxgraph-edge-title-editor:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.18);
+}
+
+.markdown-body .maxgraph-edge {
+  fill: none;
+  stroke: #64748b;
+  stroke-linecap: round;
+  stroke-width: 1.6;
+}
+
+.markdown-body .maxgraph-edge-arrow {
+  fill: #64748b;
+  stroke: #64748b;
+}
+
+.markdown-body .maxgraph-node-label {
+  fill: #1f2937;
+  font-size: 13px;
+  font-weight: 600;
+  pointer-events: none;
+}
+
+.markdown-body .maxgraph-edge-label {
+  cursor: text;
+  pointer-events: auto;
+}
+
+.markdown-body .maxgraph-edge-label.maxgraph-edge-label-saving {
+  cursor: progress;
+}
+
+.markdown-body .maxgraph-edge-label-text {
+  fill: #334155;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.markdown-body .maxgraph-diagram-error {
+  background: #fff1f2;
+  border: 1px solid #fecdd3;
+  border-radius: 6px;
+  color: #9f1239;
+  padding: 12px 14px;
+}
+
+/* Top-right "Add" control. Lives above the canvas and outside the zoom/pan transform, so it
+   stays pinned while the diagram is zoomed or panned. */
+.markdown-body .maxgraph-add-controls {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+  cursor: default;
+  display: flex;
+  gap: 4px;
+  align-items: flex-start;
+}
+
+.markdown-body .maxgraph-add-button,
+.markdown-body .maxgraph-add-edge-button,
+.markdown-body .maxgraph-delete-button {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  color: #334155;
+  cursor: pointer;
+  display: flex;
+  font-size: 18px;
+  font-weight: 700;
+  height: 28px;
+  justify-content: center;
+  line-height: 1;
+  padding: 0;
+  width: 28px;
+}
+
+.markdown-body .maxgraph-delete-button {
+  font-size: 14px;
+}
+
+.markdown-body .maxgraph-add-button:hover,
+.markdown-body .maxgraph-add-edge-button:hover,
+.markdown-body .maxgraph-delete-button:hover {
+  background: #eef2f7;
+}
+
+body.body--dark .markdown-body .maxgraph-add-button,
+body.body--dark .markdown-body .maxgraph-add-edge-button,
+body.body--dark .markdown-body .maxgraph-delete-button {
+  background: #1f2733;
+  border-color: #3a4452;
+  color: #e8edf4;
+}
+
+body.body--dark .markdown-body .maxgraph-add-button:hover,
+body.body--dark .markdown-body .maxgraph-add-edge-button:hover,
+body.body--dark .markdown-body .maxgraph-delete-button:hover {
+  background: #2a3340;
+}

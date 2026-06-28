@@ -2,7 +2,7 @@
   "name": "md-activator",
   "displayName": "MD Activator",
   "description": "Preview interactive MD Activator Markdown beside the VS Code editor.",
-  "version": "0.1.2",
+  "version": "0.1.4",
   "publisher": "khtwo",
   "license": "MIT",
   "repository": {

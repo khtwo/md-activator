@@ -1,0 +1,30 @@
+/* File/folder dropdown option styling, split out of style.css to keep runtime assets under the
+   per-file line cap. Covers the option row, its type icon, and the collapse/expand toggle. */
+
+.viewer-file-option {
+  min-height: 36px;
+  /* Indentation is carried by the leading toggle section so the empty band left of the chevron is a
+     clickable child (collapse/expand) rather than the row itself (which would navigate). */
+  padding-left: 0;
+}
+
+.viewer-file-option-icon {
+  min-width: 28px;
+  padding-right: 8px;
+}
+
+.viewer-file-option-toggle {
+  min-width: 22px;
+  padding-right: 0;
+  align-items: center;
+  justify-content: center;
+}
+
+.viewer-file-option-toggle-icon {
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.viewer-file-option-toggle-icon:hover {
+  background: rgba(0, 0, 0, 0.08);
+}

@@ -1,0 +1,146 @@
+/* In-preview find bar and match highlights (prose + SVG diagrams). See app/static/search.js. */
+
+.md-search-box {
+  position: fixed;
+  top: 12px;
+  right: 16px;
+  z-index: 4000;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  background: #ffffff;
+  border: 1px solid #c4ccd7;
+  border-radius: 8px;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.18);
+  font-size: 13px;
+  color: #111827;
+}
+
+.md-search-box[hidden] {
+  display: none;
+}
+
+.md-search-input {
+  width: 160px;
+  padding: 4px 6px;
+  border: 1px solid #c4ccd7;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #111827;
+  font: inherit;
+  outline: none;
+}
+
+.md-search-input:focus {
+  border-color: #2563eb;
+}
+
+.md-search-counter {
+  min-width: 38px;
+  text-align: center;
+  color: #4b5563;
+  font-variant-numeric: tabular-nums;
+}
+
+.md-search-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid #c4ccd7;
+  border-radius: 4px;
+  background: #e5e7eb;
+  color: #111827;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.md-search-btn:hover {
+  background: #d6dbe3;
+}
+
+/* Prose highlight (HTML <mark>, including mermaid foreignObject labels). */
+.markdown-body mark.md-search-hit {
+  background: #fde68a;
+  color: inherit;
+  border-radius: 2px;
+  padding: 0 1px;
+}
+
+.markdown-body mark.md-search-hit.md-search-hit--current {
+  background: #fb923c;
+  color: #111827;
+  box-shadow: 0 0 0 1px #c2410c;
+}
+
+/* SVG diagram tint: SVG text has no background box, so the matching characters are tinted via fill
+   (best-effort). A thin white stroke keeps the tinted run legible over varied node fills. */
+.markdown-body tspan.md-search-hit {
+  fill: #92400e;
+  font-weight: 700;
+  paint-order: stroke;
+  stroke: #fde68a;
+  stroke-width: 0.6px;
+}
+
+.markdown-body tspan.md-search-hit.md-search-hit--current {
+  fill: #7c2d12;
+  stroke: #fb923c;
+  stroke-width: 0.9px;
+}
+
+/* Dark theme. */
+body.body--dark .md-search-box {
+  background: #1f2730;
+  border-color: #3a4654;
+  color: #e5e7eb;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5);
+}
+
+body.body--dark .md-search-input {
+  background: #151a21;
+  border-color: #3a4654;
+  color: #e5e7eb;
+}
+
+body.body--dark .md-search-input:focus {
+  border-color: #60a5fa;
+}
+
+body.body--dark .md-search-counter {
+  color: #9aa6b2;
+}
+
+body.body--dark .md-search-btn {
+  background: #555b63;
+  border-color: #64748b;
+  color: #e5e7eb;
+}
+
+body.body--dark .md-search-btn:hover {
+  background: #646b74;
+}
+
+body.body--dark .markdown-body mark.md-search-hit {
+  background: #b45309;
+  color: #fdf3e7;
+}
+
+body.body--dark .markdown-body mark.md-search-hit.md-search-hit--current {
+  background: #f97316;
+  color: #1b1206;
+  box-shadow: 0 0 0 1px #fdba74;
+}
+
+body.body--dark .markdown-body tspan.md-search-hit {
+  fill: #fde68a;
+  stroke: #1f2730;
+}
+
+body.body--dark .markdown-body tspan.md-search-hit.md-search-hit--current {
+  fill: #fdba74;
+  stroke: #1f2730;
+}

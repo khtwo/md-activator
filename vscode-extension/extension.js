@@ -63,9 +63,26 @@ async function findFreePort(startPort = DEFAULT_PORT_START, maxPort = MAX_PORT) 
   throw new Error(`No free localhost port found from ${startPort} to ${maxPort}`);
 }
 
-function buildWebviewHtml({ webviewPort, relativePath }) {
+function generateNonce() {
+  return require("node:crypto").randomBytes(16).toString("base64");
+}
+
+function buildPanelTitle(simpleName) {
+  const name = String(simpleName || "").replace(/\s+/g, " ").trim();
+  return name ? `MD Activator - ${name}` : "MD Activator";
+}
+
+function panelTitleFromMessage(message) {
+  if (!message || message.type !== "title") {
+    return null;
+  }
+  return buildPanelTitle(message.simpleName);
+}
+
+function buildWebviewHtml({ webviewPort, relativePath, nonce }) {
   const encodedPath = encodeRelativePath(relativePath);
   const src = `http://localhost:${webviewPort}/${encodedPath}`;
+  const scriptNonce = nonce || generateNonce();
 
   return `<!doctype html>
 <html lang="en">
@@ -73,7 +90,7 @@ function buildWebviewHtml({ webviewPort, relativePath }) {
   <meta charset="UTF-8">
   <meta
     http-equiv="Content-Security-Policy"
-    content="default-src 'none'; frame-src http://localhost:${webviewPort}; style-src 'unsafe-inline';"
+    content="default-src 'none'; frame-src http://localhost:${webviewPort}; style-src 'unsafe-inline'; script-src 'nonce-${scriptNonce}';"
   >
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>MD Activator Preview</title>
@@ -91,6 +108,17 @@ function buildWebviewHtml({ webviewPort, relativePath }) {
 </head>
 <body>
   <iframe title="MD Activator Preview" src="${src}"></iframe>
+  <script nonce="${scriptNonce}">
+    (function () {
+      const vscode = acquireVsCodeApi();
+      window.addEventListener("message", function (event) {
+        const data = event.data;
+        if (data && data.type === "md-activator:title") {
+          vscode.postMessage({ type: "title", simpleName: data.simpleName });
+        }
+      });
+    })();
+  </script>
 </body>
 </html>`;
 }
@@ -403,7 +431,7 @@ async function openPreviewToSide(vscode, context, resourceUri) {
     const port = await ensureServer({ vscode, context, contentRoot: target.contentRoot });
     const panel = vscode.window.createWebviewPanel(
       "mdActivatorPreview",
-      `MD Activator: ${path.basename(filePath)}`,
+      buildPanelTitle(path.basename(filePath)),
       vscode.ViewColumn.Beside,
       buildWebviewOptions({ serverPort: port }),
     );
@@ -411,6 +439,13 @@ async function openPreviewToSide(vscode, context, resourceUri) {
     panel.webview.html = buildWebviewHtml({
       webviewPort: port,
       relativePath: target.relativePath,
+    });
+
+    panel.webview.onDidReceiveMessage((message) => {
+      const nextTitle = panelTitleFromMessage(message);
+      if (nextTitle) {
+        panel.title = nextTitle;
+      }
     });
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
@@ -443,6 +478,8 @@ module.exports = {
   buildRuntimeChecks,
   buildWindowsProcessTreeKillArgs,
   buildWebviewHtml,
+  buildPanelTitle,
+  panelTitleFromMessage,
   buildWebviewOptions,
   findFreePort,
   markdownFileForPreviewCommand,

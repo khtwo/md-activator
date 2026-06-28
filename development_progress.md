@@ -29,8 +29,14 @@ taskTypes/html-web-ui-design/html-web-ui-design.md
 [Mockup 1](package/single-html.zip)  [Mockup 2](package/single-html.zip)
 
 ## Confirm Mockup Design
+single
+[ ] Mockup 1 [ ] Mockup 2  [x] Mockup 3
 
-[ ] Mockup 1 [ ] Mockup 2 [ ] [confirm]
+[ ] Additional 1 [ ] Additional 2 [ ] Additional 3
+
+[ ] [confirm]
+
+
 
 ## Mockup 1
 
@@ -50,7 +56,7 @@ flowchart TD
     C --> D[Retrieve Candidate Pages]
 
     subgraph Indexing Pipeline
-        E[Web Crawlers / bot] --> F[Fetch web pages]
+        E["Web Crawlers / bot 1"] --> F[Fetch web pages]
         F --> G[Parse HTML, links, media, metadata]
         G --> H[Render JavaScript when needed]
         H --> I[Extract content and signals]

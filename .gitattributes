@@ -1,0 +1,8 @@
+# Keep line endings stable across Windows and macOS/Linux checkouts.
+
+# POSIX shell launchers must stay LF, or the `#!/usr/bin/env sh` shebang breaks
+# when the script is run on macOS/Linux.
+*.sh text eol=lf
+
+# Windows batch launchers stay CRLF.
+*.bat text eol=crlf

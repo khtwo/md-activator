@@ -15,13 +15,14 @@ On first preview, `uv run` may spend a few seconds creating or synchronizing the
 
 ## Local Install
 
-From `vscode-extension/`:
+From the repository root:
 
 ```powershell
-npm install
-npm run package
-code --install-extension .\md-activator-0.1.2.vsix
+.\vsix_package.bat
+code --install-extension .\vscode-extension\vsix-package\md-activator-0.1.4.vsix --force
 ```
+
+The packaging helper installs the root frontend build dependencies, builds the local maxGraph adapter bundle, installs the extension packaging dependencies, and writes the versioned VSIX into `vscode-extension\vsix-package\`.
 
 After installation, reload VS Code and open a markdown file.
 

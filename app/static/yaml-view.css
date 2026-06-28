@@ -1,0 +1,94 @@
+.markdown-body .yaml-view {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: 0.9rem;
+  line-height: 1.55;
+  color: #1f2933;
+}
+
+.markdown-body .yaml-tree,
+.markdown-body .yaml-children {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.markdown-body .yaml-children {
+  padding-left: 1.25rem;
+  margin-left: 0.5rem;
+  border-left: 1px solid rgba(100, 116, 139, 0.28);
+}
+
+.markdown-body .yaml-node.yaml-collapsed > .yaml-children {
+  display: none;
+}
+
+.markdown-body .yaml-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  padding: 0.05rem 0;
+}
+
+.markdown-body .yaml-toggle,
+.markdown-body .yaml-toggle-spacer {
+  flex: 0 0 auto;
+  width: 1.15rem;
+  height: 1.15rem;
+}
+
+.markdown-body .yaml-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  line-height: 1;
+  font: inherit;
+  font-weight: 700;
+  color: #475569;
+  background: #eef2f7;
+  border: 1px solid rgba(100, 116, 139, 0.45);
+  border-radius: 3px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.markdown-body .yaml-toggle:hover {
+  background: #e2e8f0;
+}
+
+.markdown-body .yaml-content {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.markdown-body .yaml-blank .yaml-row {
+  min-height: 0.7rem;
+}
+
+.markdown-body .yaml-empty {
+  color: #64748b;
+  font-style: italic;
+}
+
+body.body--dark .markdown-body .yaml-view {
+  color: #e2e8f0;
+}
+
+body.body--dark .markdown-body .yaml-children {
+  border-left-color: rgba(148, 163, 184, 0.32);
+}
+
+body.body--dark .markdown-body .yaml-toggle {
+  color: #cbd5e1;
+  background: #2a3038;
+  border-color: rgba(148, 163, 184, 0.4);
+}
+
+body.body--dark .markdown-body .yaml-toggle:hover {
+  background: #333b45;
+}
+
+body.body--dark .markdown-body .yaml-empty {
+  color: #94a3b8;
+}

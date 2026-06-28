@@ -8,26 +8,45 @@
   <link href="/assets/quasar-extras/material-icons/material-icons.css" rel="stylesheet" type="text/css">
   <link href="/assets/prismjs/prism.min.css" rel="stylesheet" type="text/css">
   <link href="/static/style.css?v={{ static_asset_version }}" rel="stylesheet" type="text/css">
+  <link href="/static/theme-dark.css?v={{ static_asset_version }}" rel="stylesheet" type="text/css">
+  <link href="/static/file-dropdown.css?v={{ static_asset_version }}" rel="stylesheet" type="text/css">
+  <link href="/static/mermaid-zoom-pan.css?v={{ static_asset_version }}" rel="stylesheet" type="text/css">
+  <link href="/static/max-graph.css?v={{ static_asset_version }}" rel="stylesheet" type="text/css">
+  <link href="/static/search.css?v={{ static_asset_version }}" rel="stylesheet" type="text/css">
+  <link href="/static/yaml-view.css?v={{ static_asset_version }}" rel="stylesheet" type="text/css">
+  <link href="/static/json-view.css?v={{ static_asset_version }}" rel="stylesheet" type="text/css">
+  <link href="/static/new-files.css?v={{ static_asset_version }}" rel="stylesheet" type="text/css">
 </head>
 <body>
   {% raw %}
   <div id="q-app" class="q-pa-md">
-    <q-layout view="hHh lpR fFf" class="shadow-2 rounded-borders">
+    <q-layout view="hHh lpR fFf" class="viewer-shell shadow-2 rounded-borders">
       <q-page-container>
         <q-page class="q-pa-md">
           <q-toolbar class="viewer-toolbar viewer-page-toolbar">
+            <div class="viewer-nav">
+            <q-btn
+              flat
+              dense
+              round
+              icon="home"
+              class="viewer-nav-btn viewer-nav-home"
+              aria-label="Home"
+              @click="loadFile('')"
+            ></q-btn>
             <q-select
               class="viewer-file-select"
               dense
               standout
               options-dense
               v-model="targetPath"
-              :options="fileOptions"
+              :options="visibleFileOptions"
               option-label="label"
               option-value="value"
               emit-value
               map-options
               aria-label="Current folder"
+              popup-content-class="viewer-file-popup"
               :style="fileSelectStyle"
               @update:model-value="onFileSelected"
               @popup-show="refreshFileOptions"
@@ -36,12 +55,31 @@
                 <q-item
                   v-bind="scope.itemProps"
                   class="viewer-file-option"
-                  :style="{ paddingLeft: (12 + (Number(scope.opt.depth) || 0) * 18) + 'px' }"
+                  :data-opt-value="scope.opt.value"
                 >
-                  <q-item-section avatar class="viewer-file-option-icon">
+                  <q-item-section
+                    side
+                    class="viewer-file-option-toggle"
+                    :style="{ paddingLeft: (12 + (Number(scope.opt.depth) || 0) * 18) + 'px' }"
+                    @click="onFileOptionIconClick($event, scope.opt)"
+                  >
+                    <q-icon
+                      v-if="scope.opt.kind === 'folder' && isFolderExpandable(scope.opt)"
+                      :name="isFolderCollapsed(scope.opt) ? 'chevron_right' : 'keyboard_arrow_down'"
+                      size="18px"
+                      class="viewer-file-option-toggle-icon"
+                      @click.stop.prevent="toggleFolderCollapsed(scope.opt)"
+                    />
+                  </q-item-section>
+                  <q-item-section
+                    avatar
+                    class="viewer-file-option-icon"
+                    @click="onFileOptionIconClick($event, scope.opt)"
+                  >
                     <q-icon
                       :name="scope.opt.kind === 'parent' ? 'drive_folder_upload' : (scope.opt.kind === 'folder' ? 'folder' : 'description')"
                       size="18px"
+                      :class="{ 'viewer-file-option-toggle-icon': scope.opt.kind === 'folder' }"
                     />
                   </q-item-section>
                   <q-item-section>
@@ -50,7 +88,125 @@
                 </q-item>
               </template>
             </q-select>
+            <q-btn
+              flat
+              dense
+              round
+              icon="arrow_back"
+              class="viewer-nav-btn viewer-nav-back"
+              aria-label="Go back"
+              :disable="!canGoBack"
+              @click="goBack"
+            ></q-btn>
+            <q-btn
+              flat
+              dense
+              round
+              icon="arrow_forward"
+              class="viewer-nav-btn viewer-nav-forward"
+              aria-label="Go forward"
+              :disable="!canGoForward"
+              @click="goForward"
+            ></q-btn>
+            </div>
             <div class="viewer-controls">
+              <q-btn
+                flat
+                dense
+                round
+                icon="notifications"
+                class="viewer-nav-btn viewer-new-files-btn"
+                aria-label="New markdown files"
+              >
+                <q-badge
+                  v-if="newFilesAttentionCount > 0"
+                  color="red"
+                  floating
+                  rounded
+                >{{ newFilesAttentionCount }}</q-badge>
+                <q-menu
+                  class="viewer-new-files-menu"
+                  anchor="bottom right"
+                  self="top right"
+                  @show="refreshNewFiles"
+                >
+                  <div class="viewer-new-files-header">New .md files (last 2 days)</div>
+                  <q-list separator>
+                    <q-item
+                      v-for="item in newFiles"
+                      :key="item.path"
+                      clickable
+                      v-close-popup
+                      class="viewer-new-file-item"
+                      :class="{ 'viewer-new-file-unviewed': !item.viewed }"
+                      @click="openNewFile(item)"
+                    >
+                      <q-item-section>
+                        <div class="viewer-new-file-name-row">
+                          <span class="viewer-clarification-dot" aria-hidden="true" v-if="item.needsReview"></span>
+                          <div class="viewer-new-file-name">{{ item.name }}</div>
+                        </div>
+                        <div class="viewer-new-file-date">{{ item.created }}</div>
+                      </q-item-section>
+                    </q-item>
+                    <q-item v-if="!newFiles.length" class="viewer-new-files-empty">
+                      <q-item-section>No new markdown files.</q-item-section>
+                    </q-item>
+                  </q-list>
+                  <div class="viewer-new-files-footer" v-if="newFiles.length">
+                    <q-btn
+                      flat
+                      dense
+                      no-caps
+                      class="viewer-new-files-mark-all"
+                      label="Mark all viewed"
+                      aria-label="Mark all viewed"
+                      @click.stop.prevent="markAllNewFilesViewed"
+                    >
+                      <q-tooltip>Marks every listed file viewed. Files still needing a Confirm tick (yellow dot) keep their badge until you check the box.</q-tooltip>
+                    </q-btn>
+                    <div class="viewer-new-files-paging" v-if="newFilesPageCount > 1">
+                      <q-btn
+                        flat
+                        dense
+                        round
+                        icon="chevron_left"
+                        aria-label="Previous page"
+                        :disable="newFilesPage <= 1"
+                        @click.stop.prevent="prevNewFilesPage"
+                      ></q-btn>
+                      <span class="viewer-new-files-page-indicator">{{ newFilesPage }} / {{ newFilesPageCount }}</span>
+                      <q-btn
+                        flat
+                        dense
+                        round
+                        icon="chevron_right"
+                        aria-label="Next page"
+                        :disable="newFilesPage >= newFilesPageCount"
+                        @click.stop.prevent="nextNewFilesPage"
+                      ></q-btn>
+                    </div>
+                  </div>
+                </q-menu>
+              </q-btn>
+              <q-btn
+                flat
+                dense
+                round
+                icon="text_decrease"
+                class="viewer-nav-btn viewer-font-decrease"
+                aria-label="Decrease font size"
+                @click="decreaseContentFontSize"
+              ></q-btn>
+              <q-btn
+                flat
+                dense
+                round
+                icon="text_increase"
+                class="viewer-nav-btn viewer-font-increase"
+                aria-label="Increase font size"
+                @click="increaseContentFontSize"
+              ></q-btn>
               <q-select
                 class="viewer-auto-refresh-select"
                 dense
@@ -81,7 +237,7 @@
             </div>
           </q-toolbar>
           <q-banner v-if="error" class="bg-red-1 text-red-10 q-mb-md">{{ error }}</q-banner>
-          <div class="markdown-body" v-html="html" @click="onMarkdownClick" @change="onMarkdownChange" @dblclick="onMarkdownDoubleClick"></div>
+          <div class="markdown-body" :style="contentFontStyle" v-html="html" @click="onMarkdownClick" @change="onMarkdownChange" @dblclick="onMarkdownDoubleClick"></div>
         </q-page>
       </q-page-container>
     </q-layout>
@@ -92,6 +248,35 @@
   <script src="/assets/quasar/quasar.umd.prod.js"></script>
   <script src="/assets/prismjs/prism.min.js"></script>
   <script src="/assets/mermaid/mermaid.min.js"></script>
+  <script src="/static/zoom-pan.js?v={{ static_asset_version }}"></script>
+  <script src="/static/max-graph-constants.js?v={{ static_asset_version }}"></script>
+  <script src="/static/max-graph-dom.js?v={{ static_asset_version }}"></script>
+  <script src="/static/max-graph-add.js?v={{ static_asset_version }}"></script>
+  <script src="/static/max-graph-style.js?v={{ static_asset_version }}"></script>
+  <script src="/static/max-graph-routing-endpoints.js?v={{ static_asset_version }}"></script>
+  <script src="/static/max-graph-routing-paths.js?v={{ static_asset_version }}"></script>
+  <script src="/static/max-graph-history.js?v={{ static_asset_version }}"></script>
+  <script src="/static/max-graph-routing-context.js?v={{ static_asset_version }}"></script>
+  <script src="/static/max-graph-routing-scoring.js?v={{ static_asset_version }}"></script>
+  <script src="/static/max-graph-routing-candidates.js?v={{ static_asset_version }}"></script>
+  <script src="/static/max-graph-routing-shifts.js?v={{ static_asset_version }}"></script>
+  <script src="/static/max-graph-routing.js?v={{ static_asset_version }}"></script>
+  <script src="/static/max-graph-label-boxes.js?v={{ static_asset_version }}"></script>
+  <script src="/static/max-graph-labels.js?v={{ static_asset_version }}"></script>
+  <script src="/static/max-graph-label-segments.js?v={{ static_asset_version }}"></script>
+  <script src="/static/max-graph-render.js?v={{ static_asset_version }}"></script>
+  <script src="/static/max-graph-interactions.js?v={{ static_asset_version }}"></script>
+  <script src="/static/max-graph-selection.js?v={{ static_asset_version }}"></script>
+  <script src="/static/max-graph.js?v={{ static_asset_version }}"></script>
+  <script src="/static/mermaid-zoom-pan.js?v={{ static_asset_version }}"></script>
+  <script src="/static/mermaid-title-edit.js?v={{ static_asset_version }}"></script>
+  <script src="/static/app-support.js?v={{ static_asset_version }}"></script>
+  <script src="/static/mermaid-repair.js?v={{ static_asset_version }}"></script>
+  <script src="/static/search.js?v={{ static_asset_version }}"></script>
+  <script src="/static/yaml-view.js?v={{ static_asset_version }}"></script>
+  <script src="/static/json-view.js?v={{ static_asset_version }}"></script>
+  <script src="/static/content-font-scale.js?v={{ static_asset_version }}"></script>
+  <script src="/static/new-files.js?v={{ static_asset_version }}"></script>
   <script src="/static/app.js?v={{ static_asset_version }}"></script>
 </body>
 </html>

@@ -1,0 +1,86 @@
+# File Navigation & New-File Notifications
+
+_[← Application Features index](../application-features.md)._ The backend-produced file-discovery surfaces: the same-folder dropdown `fileOptions` navigation metadata and the new-`.md`-file notification bell (its scope, cache, and no-change protocol). The toolbar controls that present these are described in [browser-ui.md](browser-ui.md); URL/history navigation lives there too.
+
+## Same-Folder Dropdown Options
+Render responses that request file options include `fileOptions`, a structured list for the browser folder dropdown. Timed browser auto refresh does not request this metadata. The structured list:
+- Includes a `..` parent-folder option before other options when the current folder is not the content root.
+- Omits the `..` option when the current folder is the content root.
+- Includes `label`, `value`, `kind`, `hasMarkdown`, and `depth` for each option.
+- Uses `label` only for display and sets it to the file or folder name, not the full relative path.
+- Keeps `value` as the normalized relative path used for navigation and selection.
+- Uses `kind` values of `parent`, `file`, or `folder`.
+- Includes only `.md` files and folders that contain at least one `.md` file directly or recursively.
+- Omits folders that contain no `.md` file anywhere under them.
+- Expands markdown-bearing folders into a tree-like flat option list up to 3 visible levels below the current folder.
+- Within each folder level, lists that folder's immediate `.md` files first (case-insensitive filename order), then its markdown-bearing subfolders (case-insensitive name order), each subfolder immediately followed by its own expanded subtree using the same ordering. The `..` parent option, when present, stays pinned at the very top above the current folder's files.
+- Does not expand descendants beyond the 3 visible levels; selecting a deeper markdown-bearing folder navigates into that folder and refreshes the list from there.
+- Uses `depth` for visual indentation in the browser dropdown. The parent option has depth `0`.
+- Folder collapse/expand is a browser-side display concern only: `fileOptions` always returns the full visible tree and carries no collapse state. The backend is unaffected by which folders the browser has collapsed.
+
+## New Markdown File Notifications
+The toolbar surfaces recently-created markdown files so a reader notices files that appear in the watched tree while the viewer is open.
+
+Scope and window:
+- The watched tree is the configured content root and all subfolders (the same tree the file/folder dropdown walks). Only `.md` files are considered.
+- A file's **activity time** is the later of its creation time (filesystem `st_birthtime`, falling back to `st_ctime` on Windows) and its last-modification time (`st_mtime`). This activity time decides whether the file is "new", how it sorts, and the timestamp shown for it, so a file that was created earlier but **edited** recently resurfaces as new.
+- The span is measured in **populated days**, not calendar days: a populated day is a local calendar day on which at least one listable `.md` file has activity, and days with no such file do not count. The list includes files from the **`span` most recent populated days** (default `span` = 3; set with `--span <N≥1>` — see [server-api.md](server-api.md)), counting back from the most recent populated day. The lower bound is local midnight of the span-th most recent populated day (or the oldest populated day when fewer than `span` exist). Empty calendar days between populated days are skipped, so the span can cover more than `span` calendar days — e.g. with `span` = 1, if nothing has activity yesterday but a file does the day before, that day is the most recent populated day and its files are listed.
+- The lower bound is computed once, on the first scan that finds at least one listable file, and is fixed for that session, so a file visible at the anchor does not silently age out mid-session and files created or modified after the anchor are also included. Restarting the server re-anchors from the files present at the new start.
+- The list is ordered with **review-needing files first** (see below), then the remaining files by activity time, newest first, with case-insensitive filename order as a tie-break. Within each group, files created or modified after the anchor appear at the top. Ordering is applied before paging, so it holds across pages.
+- Git-ignored exclusion: when the content root is inside a git working tree, folders and `.md` files that git's ignore rules would exclude are omitted from the list. The full standard rule set is honored as resolved by git itself — every applicable `.gitignore` (root and nested), `.git/info/exclude`, and the user's global excludes — including negation and nested overrides. Ignored folders are pruned during traversal (their subtrees are never scanned), and the `.git/` metadata directory is always skipped. Inclusion/exclusion matches whatever `git check-ignore` reports for each path, so the result follows git's own resolution exactly. When the content root is not inside a git working tree, or the `git` executable is unavailable, no ignore filtering is applied. (This applies to the new-files list only; the file/folder dropdown tree is unaffected.)
+- Files needing review float to the top: a `.md` file whose **last confirm marker is unchecked** is flagged as needing review (`needsReview`), listed before the ordinary new files, and marked in the UI with a small yellow circle. A *confirm marker* is a line whose leading content (after optional indentation and an optional list bullet `-`/`*`/`+` or `N.`/`N)`) is a checkbox — checked (`[x]`/`[X]`) **or** unchecked (`[ ]`/`[]`) — optionally followed by a button-label `[` (with or without a closing `]`) and/or markdown bold `**`, then the word `confirm` (case-insensitive): e.g. `[ ] Confirm`, `[ ] **Confirm**`, `[ ] [Confirm]`, `[ ] [confirm` (open button-label, no closing bracket), `[] confirm the design`, `- [ ] Confirm`, `[x] [confirm]`. **Only the last confirm marker in the file decides**: the file needs review when that last marker is unchecked, and does **not** need review when it is checked — even if an earlier confirm line is still unchecked (earlier markers are treated as superseded). A file with no confirm marker never needs review. The marker is line-anchored, so a mid-sentence prose mention does not count. A marker that lies **inside a fenced code block** (an opening fence of 3+ backticks or tildes — same definition the renderer uses — through its closing fence; an unclosed fence runs to end of file) is treated as literal code text and is skipped; only markers outside any code fence are considered. Checking the file's last confirm box (for example through the rendered checkbox, which writes `[x]` back) clears the flag on the next poll: the file re-sorts among the ordinary new files and the badge decrements. There is no separate dismiss action and no persisted review state; the checkbox in the file is the only state.
+
+Endpoint: `GET /api/new-files`
+
+Query parameters:
+- `page`: optional 1-based page number. Defaults to `1`, and must be `>= 1`. An out-of-range page is clamped to the last page.
+- `detect`: optional boolean (default `false`). When `true`, the server rescans the tree (the detector) and refreshes its cached list before responding; when `false`, the response is served from the cache without a scan.
+- `ifListVersion`: optional string. The caller's last-known list version (see `listVersion` below). On a `detect=true` request whose `ifListVersion` matches the current version, the server returns a no-change indicator instead of the list. Ignored when `detect=false`.
+
+Successful response:
+```json
+{
+  "page": 1,
+  "pageSize": 10,
+  "pageCount": 3,
+  "totalCount": 23,
+  "unviewedCount": 5,
+  "reviewCount": 2,
+  "attentionCount": 6,
+  "listVersion": "a1b2c3…",
+  "files": [
+    {"path": "notes/new.md", "name": "new.md", "created": "2026-06-16 14:03:21", "createdEpoch": 1781962001.0, "viewed": false, "needsReview": false}
+  ]
+}
+```
+- The list is paged at 10 files per page (`pageSize`), in the order described above (review-needing files first).
+- `totalCount` is the number of listed files; `unviewedCount` is how many of them are not yet viewed; `reviewCount` is how many currently need review; `attentionCount` is `reviewCount` plus the number of *non-review* files not yet viewed — the value the toolbar badge shows.
+- Each file item carries a `needsReview` boolean (true when the file's last confirm marker is unchecked).
+- `listVersion` is an opaque token that changes whenever the list would render differently — a file added, removed, or re-ordered, a listed file's viewed state changing, or a file's review state flipping. A caller stores it and passes it back as `ifListVersion`.
+
+No-change response (only for `detect=true` when `ifListVersion` matches the current version):
+```json
+{"status": "no-change", "listVersion": "a1b2c3…"}
+```
+- Carries no `files`; the caller keeps its current list and badge. This mirrors the markdown render refresh's `ifRenderVersion`/`no-change` protocol, so an idle poll does not re-send the list.
+- Each file item carries its content-root-relative `path` (forward slashes), display `name`, `created` (local **activity** timestamp — the later of creation and last-modification — to the second, `YYYY-MM-DD HH:MM:SS`; field name kept for contract stability), `createdEpoch`, `viewed`, and `needsReview`.
+
+Caching (paging never rescans):
+- The server keeps a cache of the scanned, sorted list (the expensive tree walk, git-ignore filtering, activity-time read, and ordering). A page request returns a slice of the cache and does not scan the filesystem, so changing pages stays fast regardless of tree size or git-ignore cost.
+- The cache is refreshed only by the detector (a `detect=true` request, which the browser poll sends): the server rescans and swaps in the new list only when the set of qualifying files changed (a file added, removed, or re-ordered). An unchanged scan leaves the cache in place.
+- The `viewed` flag and `unviewedCount` are computed from the live registry each time a page is built, so opening a file is reflected on the next refresh without a rescan. The cache is rebuilt lazily after the content root changes.
+
+Viewed state (persistent):
+- A file becomes *viewed* when it is opened as the main document in the viewer through any route — direct URL, file/folder dropdown, or the notification dropdown; opening it is what `GET /api/render` records.
+- Viewing never removes a file from the list; it only flips its `viewed` flag.
+- The notification dropdown also offers a **Mark all viewed** action that flips the `viewed` flag of **every file in the current list** (the whole combined list across all pages, not just the page on screen) in one click. It is the same persistent viewed state as opening a file, applied as a batch (idempotent; files already viewed are unchanged). *Viewed* is not *reviewed*: a review-needing file marked viewed keeps its `needsReview` flag, its yellow circle, and its place in the review group, so the badge's `reviewCount` portion is unchanged. After Mark all viewed, `unviewedCount` is `0` and `attentionCount` equals `reviewCount`.
+  - Endpoint: `POST /api/new-files/mark-all-viewed` (no request body). It marks every file in the server's current cached list viewed and returns the refreshed first-page payload (the same shape as `GET /api/new-files`), so the badge and per-row `viewed` flags update in one round-trip. Because viewed state is overlaid live when a page is built, a later cache read (`detect=false`) reflects the marked state without a rescan, and `listVersion` changes so an idle poll picks it up.
+- The set of viewed files is persisted on disk in a **single fixed per-user registry** at `~/.md-activator/md-activator-viewed.json` (the user's home directory on both Windows and Linux), storing **absolute** paths in the format `{"viewed": ["<absolute/posix/path>", ...]}`. The location is the same for every served folder and every session — it does **not** follow the content root — so the viewed/unviewed distinction survives server shutdown and restart **and** carries across working-folder changes: the same physical file has a different content-root-relative path when a different folder is served, but its absolute path is unchanged, so it stays recognized as viewed. The registry is never auto-cleared, and is not itself listed or served as content.
+- When a listing is built, only registry entries whose absolute path is **under the current content root** contribute to that listing's `viewed` flags and counts; entries for files outside the served folder are ignored (the per-user registry is shared across folders, so it never leaks unrelated files into a given listing).
+
+Browser notification icon:
+- A single bell icon (`notifications`) sits in the toolbar's right-edge control group with the accessible name `New markdown files`. Its floating badge shows `attentionCount` (files needing review plus unviewed non-review new files) and is hidden when that count is zero; the icon still opens the list.
+- The browser polls `GET /api/new-files` (with `detect=true`, the detector) every 5 seconds to keep the badge and, while the dropdown is open, the visible page current. It passes its last-known `listVersion` as `ifListVersion`, so a poll that finds nothing changed gets the small no-change indicator and leaves the list/badge untouched. Paging (previous/next) and the post-open refresh request the cache (`detect=false`), so they never trigger a scan.
+- Clicking the icon opens one dropdown with a single list (one header, one paging control). Files needing review are listed first, each prefixed by a small yellow circle marking it as a "needs review" item; the ordinary new files follow. Each row shows the filename — capped to 2 lines with an ellipsis for longer names inside a width-bounded panel — above its creation timestamp. Unviewed (non-review) files render in bold; viewed files render in normal weight. Clicking a row opens that file (and marks a non-review file viewed).
+- Beneath the list, a footer row is shown whenever the list has at least one file. It holds a borderless **Mark all viewed** button (a flat button with no border or shadow) that marks every file in the combined list viewed (see Viewed state above); the dropdown stays open so the rows drop to normal weight and the badge updates in place. The button carries a tooltip noting that clarification (yellow-dot) files keep their badge until their `[ ] Confirm` box is ticked, so the badge settling to the review count rather than zero is expected (*viewed* is not *reviewed*).
+- When more than one page exists, the same footer row also shows previous/next controls and a `page X / Y` indicator over the combined list, beside the Mark-all-viewed button; paging is server-side. With a single page only the Mark-all-viewed button shows.

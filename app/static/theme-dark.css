@@ -1,0 +1,240 @@
+body.body--dark {
+  background: #111418;
+}
+
+body.body--dark .viewer-page-toolbar {
+  background: #2f3742;
+  color: #f8fafc;
+}
+
+body.body--dark .viewer-nav-btn {
+  color: #f8fafc;
+}
+
+body.body--dark .viewer-toolbar .q-field--standout .q-field__control {
+  background: #555b63;
+  color: #f8fafc;
+}
+
+body.body--dark .viewer-toolbar .q-field--standout.q-field--highlighted .q-field__control,
+body.body--dark .viewer-toolbar .q-field--standout .q-field__control:hover {
+  background: #5b6472;
+}
+
+body.body--dark .viewer-toolbar .viewer-theme-select.q-field--standout .q-field__control {
+  background: #52565d;
+  min-height: 38px;
+}
+
+body.body--dark .viewer-toolbar .viewer-theme-select.q-field--standout.q-field--highlighted .q-field__control,
+body.body--dark .viewer-toolbar .viewer-theme-select.q-field--standout .q-field__control:hover {
+  background: #5d626a;
+}
+
+body.body--dark .viewer-toolbar .viewer-theme-select .q-field__marginal {
+  height: 38px;
+}
+
+body.body--dark .viewer-toolbar .q-field__label,
+body.body--dark .viewer-toolbar .q-field__native,
+body.body--dark .viewer-toolbar .q-field__append {
+  color: #f8fafc;
+}
+
+body.body--dark .markdown-body {
+  background: #1e2228;
+  color: #eef2f7;
+}
+
+body.body--dark .markdown-body a {
+  color: #8ab4f8;
+}
+
+body.body--dark .markdown-body pre,
+body.body--dark .markdown-body pre[class*='language-'],
+body.body--dark .markdown-body code[class*='language-'] {
+  background: #151a21;
+  color: #dce6f0;
+  text-shadow: none;
+}
+
+body.body--dark .markdown-body pre {
+  border: 1px solid #303844;
+}
+
+body.body--dark .markdown-body :not(pre) > code {
+  background: #2a3038;
+  color: #f0d38a;
+  border-radius: 4px;
+  padding: 0.1em 0.35em;
+}
+
+body.body--dark .markdown-body .token.comment,
+body.body--dark .markdown-body .token.prolog,
+body.body--dark .markdown-body .token.doctype,
+body.body--dark .markdown-body .token.cdata {
+  color: #8a95a3;
+}
+
+body.body--dark .markdown-body .token.punctuation {
+  color: #b8c2cc;
+}
+
+body.body--dark .markdown-body .token.property,
+body.body--dark .markdown-body .token.tag,
+body.body--dark .markdown-body .token.boolean,
+body.body--dark .markdown-body .token.number,
+body.body--dark .markdown-body .token.constant,
+body.body--dark .markdown-body .token.symbol {
+  color: #f2a7a7;
+}
+
+body.body--dark .markdown-body .token.selector,
+body.body--dark .markdown-body .token.attr-name,
+body.body--dark .markdown-body .token.string,
+body.body--dark .markdown-body .token.char,
+body.body--dark .markdown-body .token.builtin {
+  color: #9bd6a4;
+}
+
+body.body--dark .markdown-body .token.operator,
+body.body--dark .markdown-body .token.entity,
+body.body--dark .markdown-body .token.url,
+body.body--dark .markdown-body .language-css .token.string,
+body.body--dark .markdown-body .style .token.string {
+  color: #91c7f4;
+}
+
+body.body--dark .markdown-body .token.atrule,
+body.body--dark .markdown-body .token.attr-value,
+body.body--dark .markdown-body .token.keyword {
+  color: #c9b6ff;
+}
+
+body.body--dark .markdown-body .token.function,
+body.body--dark .markdown-body .token.class-name {
+  color: #ffd37a;
+}
+
+body.body--dark .markdown-body table {
+  border-color: #3a4350;
+}
+
+body.body--dark .markdown-body th,
+body.body--dark .markdown-body td {
+  border-color: #3a4350;
+}
+
+body.body--dark .markdown-body th {
+  background: #252b34;
+}
+
+body.body--dark .markdown-body tr:nth-child(even) {
+  background: #20262e;
+}
+
+body.body--dark .markdown-body .markdown-table {
+  background: #1b2027;
+  border-color: #3a4350;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.22);
+}
+
+body.body--dark .markdown-body .markdown-table th {
+  background: #2a313c;
+  color: #f8fafc;
+}
+
+body.body--dark .markdown-body .markdown-table td {
+  color: #e2e8f0;
+}
+
+body.body--dark .markdown-body .markdown-table tbody tr:nth-child(even) {
+  background: #20262e;
+}
+
+body.body--dark .markdown-body .markdown-table tbody tr:hover {
+  background: #26303a;
+}
+
+body.body--dark .markdown-body blockquote {
+  background: #20262e;
+  border-left: 4px solid #526074;
+  color: #cbd5e1;
+}
+
+body.body--dark .markdown-body .mermaid {
+  --mermaid-node-bg: #374151;
+  --mermaid-node-border: #94a3b8;
+  --mermaid-cluster-bg: #2f3742;
+  --mermaid-cluster-border: #64748b;
+  --mermaid-edge: #b9c4d1;
+  background: #151a21;
+  border: 1px solid #303844;
+  color: #e8edf4;
+}
+
+body.body--dark .markdown-body .mermaid svg {
+  background: #151a21;
+}
+
+body.body--dark .markdown-body .mermaid .node rect,
+body.body--dark .markdown-body .mermaid .node circle,
+body.body--dark .markdown-body .mermaid .node ellipse,
+body.body--dark .markdown-body .mermaid .node polygon,
+body.body--dark .markdown-body .mermaid .node path {
+  fill: var(--mermaid-node-bg) !important;
+  stroke: var(--mermaid-node-border) !important;
+}
+
+body.body--dark .markdown-body .mermaid .cluster rect {
+  fill: var(--mermaid-cluster-bg) !important;
+  stroke: var(--mermaid-cluster-border) !important;
+}
+
+body.body--dark .markdown-body .mermaid .label,
+body.body--dark .markdown-body .mermaid .nodeLabel,
+body.body--dark .markdown-body .mermaid .cluster-label,
+body.body--dark .markdown-body .mermaid .edgeLabel {
+  color: #e8edf4 !important;
+}
+
+body.body--dark .markdown-body .mermaid .edgeLabel,
+body.body--dark .markdown-body .mermaid .edgeLabel p {
+  background: #151a21 !important;
+}
+
+body.body--dark .markdown-body .mermaid .edgePath .path,
+body.body--dark .markdown-body .mermaid .flowchart-link {
+  stroke: var(--mermaid-edge) !important;
+}
+
+body.body--dark .markdown-body .mermaid marker,
+body.body--dark .markdown-body .mermaid marker path {
+  fill: var(--mermaid-edge) !important;
+  stroke: var(--mermaid-edge) !important;
+}
+
+body.body--dark .markdown-body .step-progress-step {
+  --step-line: #454d57;
+  --step-line-active: #58a6ff;
+  --step-complete: #28b463;
+  --step-current: #8ab4f8;
+}
+
+body.body--dark .markdown-body .step-progress-dot {
+  background: #1e2228;
+  border-color: #59636f;
+}
+
+body.body--dark .markdown-body .step-progress {
+  --step-scrollbar-thumb: #64748b;
+}
+
+body.body--dark .markdown-body .step-progress-step--complete .step-progress-dot {
+  background: var(--step-line-active);
+  border-color: var(--step-line-active);
+}
+
+body.body--dark .markdown-body .step-progress-step--pending .step-progress-label {
+  color: #e5e7eb;
+}
