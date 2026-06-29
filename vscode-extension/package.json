@@ -46,7 +46,7 @@
       "editor/title": [
         {
           "command": "mdActivator.openPreviewToSide",
-          "when": "resourceLangId == markdown",
+          "when": "resourceLangId == markdown || resourceExtname =~ /^\\.(md|markdown|mdown|mkdn)$/i",
           "group": "navigation"
         }
       ]

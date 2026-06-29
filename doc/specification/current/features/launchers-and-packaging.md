@@ -29,7 +29,7 @@ The VS Code extension lives under `vscode-extension/` and packages MD Activator 
 Extension manifest:
 - Uses publisher `khtwo` and extension name `md-activator`.
 - Declares VS Code desktop compatibility with `engines.vscode` `^1.66.0`.
-- Contributes command `mdActivator.openPreviewToSide` with an editor-title icon visible when `resourceLangId == markdown`.
+- Contributes command `mdActivator.openPreviewToSide` with an editor-title icon visible for markdown files — when the editor language id is `markdown` **or** the resource extension is a supported markdown extension (`.md`, `.markdown`, `.mdown`, `.mkdn`, case-insensitive, matching the extension's own `isMarkdownFilePath`). The extension-based fallback keeps the icon visible on markdown files whose language id is reassigned by VS Code's content-based language detection (e.g. a `SKILL.md` whose YAML frontmatter is detected as `yaml`).
 - Contributes command `mdActivator.stopServer` for stopping the spawned local preview server.
 - Contributes settings `mdActivator.portStart` and `mdActivator.uvPath`.
 - Includes local VSIX listing metadata: display name, description, categories, keywords, README, changelog, icon, publisher ID, and license reference.
