@@ -349,6 +349,56 @@ class MermaidEdgeTitleUpdateResult:
 
 
 @dataclass
+class MermaidNodeAddResult:
+    relative_path: str
+    line: int
+    index: int
+    diagram_type: str
+    node_id: str
+    previous_source: str
+    source: str
+
+
+@dataclass
+class MermaidEdgeAddResult:
+    relative_path: str
+    line: int
+    index: int
+    diagram_type: str
+    source_id: str
+    target_id: str
+    previous_source: str
+    source: str
+
+
+@dataclass
+class MermaidNodesDeleteResult:
+    relative_path: str
+    line: int
+    index: int
+    diagram_type: str
+    node_ids: list[str]
+    previous_source: str
+    source: str
+
+
+@dataclass
+class MermaidEdgeDeleteResult:
+    relative_path: str
+    line: int
+    index: int
+    previous_source: str
+    source: str
+
+
+@dataclass
+class MermaidBlockRestoreResult:
+    relative_path: str
+    line: int
+    index: int
+
+
+@dataclass
 class MermaidRepairWritebackResult:
     relative_path: str
     line: int

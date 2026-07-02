@@ -31,7 +31,7 @@ const setupMermaidZoomPan = () => {
       shouldStartPan: (event) => !(
         event.target.closest
         && event.target.closest(
-          '.mermaid-node-editable, .mermaid-node-title-editor, .edgeLabel, .mermaid-edge-title-editor'
+          '.mermaid-node-editable, .mermaid-node-title-editor, .edgeLabel, .mermaid-edge-editable, .mermaid-edge-title-editor'
         )
       )
     });

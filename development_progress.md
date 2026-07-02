@@ -34,7 +34,7 @@ single
 
 [ ] Additional 1 [ ] Additional 2 [ ] Additional 3
 
-[ ] [confirm]
+[x] [confirm]
 
 
 

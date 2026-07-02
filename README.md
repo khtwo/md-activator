@@ -31,7 +31,7 @@ To use MD Activator inside VS Code as extension:
 1. Make sure you have installed Python 3.11+ and `uv`.
 2. In VS Code, open Extensions. 
 3. Select `...` > `Install from VSIX...`.
-4. Choose `md-activator-0.1.4.vsix` (or other version) in folder `vscode-extension/vsix-package/`.
+4. Choose `md-activator-0.1.5.vsix` (or other version) in folder `vscode-extension/vsix-package/`.
 5. Reload VS Code, wait some time for initialization finish, open a `.md` file, and click the "open MD Activator preview" icon in the editor title, top right side.
 
 ## Screen Shot

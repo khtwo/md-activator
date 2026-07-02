@@ -69,7 +69,12 @@ from .models import (
     MaxGraphNodesDeleteResult,
     MaxGraphNodesPositionUpdateResult,
     MaxGraphNodeTitleUpdateResult,
+    MermaidBlockRestoreResult,
+    MermaidEdgeAddResult,
+    MermaidEdgeDeleteResult,
     MermaidEdgeTitleUpdateResult,
+    MermaidNodeAddResult,
+    MermaidNodesDeleteResult,
     MermaidNodeTitleUpdateResult,
     MermaidRepairWritebackResult,
 )
@@ -593,8 +598,9 @@ class WritebackService:
             raise ValueError("mermaid block index must be 0 or greater")
         if diagram_type not in MERMAID_NODE_DIAGRAM_TYPES:
             raise ValueError(f"Unsupported mermaid diagram type: {diagram_type!r}")
-        if not title:
-            raise ValueError("mermaid edge title must not be empty")
+        # An empty title is allowed: it clears the edge's label (the rewriter drops the flowchart
+        # pipe/inline label or the er/class/state `: label`), leaving the edge re-editable by
+        # double-clicking its connector line.
 
         lines = md_path.read_text(encoding="utf-8").splitlines(keepends=True)
         if line > len(lines):
@@ -672,6 +678,136 @@ class WritebackService:
         raise ValueError("mermaid block not found at the requested line and index")
 
     # ------------------------------------------------------------------ #
+    # Mermaid structure write-back (add node / add edge / block restore)
+    # ------------------------------------------------------------------ #
+    def _rewrite_mermaid_block(self, path: str, line: int, index: int, rewrite):
+        """Locate the mermaid block at ``line``/``index``, apply ``rewrite`` to its content text,
+        write the file, invalidate its render cache, and return
+        ``(relative_path, previous_block, new_block)``.
+
+        The mermaid analog of ``_rewrite_maxgraph_block``; uses ``_iter_mermaid_blocks`` (which
+        handles both fenced and raw diagram blocks) and returns both source snapshots so the caller
+        can hand them to the client for block-snapshot undo/redo.
+        """
+        md_path = self._resolve_markdown_path(path)
+        if not md_path.exists() or not md_path.is_file():
+            raise FileNotFoundError(self._markdown_file_not_found_message(md_path))
+        if line < 1:
+            raise ValueError("mermaid block line must be 1 or greater")
+        if index < 0:
+            raise ValueError("mermaid block index must be 0 or greater")
+
+        lines = md_path.read_text(encoding="utf-8").splitlines(keepends=True)
+        if line > len(lines):
+            raise ValueError("mermaid block line is outside the markdown file")
+
+        text_lines = [self._line_text(single_line) for single_line in lines]
+        for block_index, anchor_line, content_start, content_end, _ in (
+            self._iter_mermaid_blocks(text_lines)
+        ):
+            if block_index != index or anchor_line != line:
+                continue
+            previous_block = "".join(lines[content_start:content_end])
+            new_block = rewrite(previous_block)
+            lines[content_start:content_end] = self._content_lines(new_block, lines)
+            md_path.write_text("".join(lines), encoding="utf-8")
+            self._invalidate_render_cache(md_path)
+            return self._to_relative(md_path), previous_block, new_block
+
+        raise ValueError("mermaid block not found at the requested line and index")
+
+    def add_mermaid_node(
+        self, path: str, line: int, index: int, diagram_type: str
+    ) -> MermaidNodeAddResult:
+        if diagram_type not in MERMAID_NODE_DIAGRAM_TYPES:
+            raise ValueError(f"Unsupported mermaid diagram type: {diagram_type!r}")
+        generated: dict[str, str] = {}
+
+        def rewrite(block_text: str) -> str:
+            node_id = self._diagram_preprocessor._generate_mermaid_node_id(block_text)
+            generated["node_id"] = node_id
+            return self._diagram_preprocessor._add_mermaid_block_node(block_text, diagram_type, node_id)
+
+        relative_path, previous_block, new_block = self._rewrite_mermaid_block(path, line, index, rewrite)
+        return MermaidNodeAddResult(
+            relative_path, line, index, diagram_type, generated["node_id"], previous_block, new_block
+        )
+
+    def add_mermaid_edge(
+        self, path: str, line: int, index: int, diagram_type: str, source_id: str, target_id: str
+    ) -> MermaidEdgeAddResult:
+        if diagram_type not in MERMAID_NODE_DIAGRAM_TYPES:
+            raise ValueError(f"Unsupported mermaid diagram type: {diagram_type!r}")
+        if not source_id or not target_id:
+            raise ValueError("mermaid edge requires a source and a target node")
+        if source_id == target_id:
+            raise ValueError("mermaid edge cannot be a self-loop")
+        relative_path, previous_block, new_block = self._rewrite_mermaid_block(
+            path,
+            line,
+            index,
+            lambda block_text: self._diagram_preprocessor._add_mermaid_block_edge(
+                block_text, diagram_type, source_id, target_id
+            ),
+        )
+        return MermaidEdgeAddResult(
+            relative_path, line, index, diagram_type, source_id, target_id, previous_block, new_block
+        )
+
+    def delete_mermaid_nodes(
+        self, path: str, line: int, index: int, diagram_type: str, node_ids: list[str]
+    ) -> MermaidNodesDeleteResult:
+        if diagram_type not in MERMAID_NODE_DIAGRAM_TYPES:
+            raise ValueError(f"Unsupported mermaid diagram type: {diagram_type!r}")
+        ids = [node_id for node_id in node_ids if node_id]
+        if not ids:
+            raise ValueError("mermaid node ids are required")
+        relative_path, previous_block, new_block = self._rewrite_mermaid_block(
+            path,
+            line,
+            index,
+            lambda block_text: self._diagram_preprocessor._delete_mermaid_block_nodes(
+                block_text, diagram_type, ids
+            ),
+        )
+        return MermaidNodesDeleteResult(
+            relative_path, line, index, diagram_type, list(ids), previous_block, new_block
+        )
+
+    def delete_mermaid_edge(
+        self,
+        path: str,
+        line: int,
+        index: int,
+        diagram_type: str,
+        source: str,
+        target: str,
+        occurrence: int,
+        edge_index: int,
+    ) -> MermaidEdgeDeleteResult:
+        if diagram_type not in MERMAID_NODE_DIAGRAM_TYPES:
+            raise ValueError(f"Unsupported mermaid diagram type: {diagram_type!r}")
+        relative_path, previous_block, new_block = self._rewrite_mermaid_block(
+            path,
+            line,
+            index,
+            lambda block_text: self._diagram_preprocessor._delete_mermaid_block_edge(
+                block_text, diagram_type, source, target, occurrence, edge_index
+            ),
+        )
+        return MermaidEdgeDeleteResult(relative_path, line, index, previous_block, new_block)
+
+    def restore_mermaid_block(
+        self, path: str, line: int, index: int, source: str
+    ) -> MermaidBlockRestoreResult:
+        if not source or not source.strip():
+            raise ValueError("mermaid block source is required")
+        relative_path, _previous, _new = self._rewrite_mermaid_block(
+            path, line, index, lambda block_text: source
+        )
+        return MermaidBlockRestoreResult(relative_path, line, index)
+
+    # ------------------------------------------------------------------ #
     # maxGraph edge-title write-back
     # ------------------------------------------------------------------ #
     def update_maxgraph_edge_title(
@@ -691,9 +827,8 @@ class WritebackService:
             raise ValueError("maxGraph block index must be 0 or greater")
         if not edge_id:
             raise ValueError("maxGraph edge id is required")
-        # An emptied title falls back to a "_" placeholder so the edge keeps a visible, editable label.
-        if not title:
-            title = "_"
+        # An emptied title is written as an empty value (value=""); no "_" placeholder is forced,
+        # since an unlabeled edge stays re-editable by double-clicking its connector line.
 
         lines = md_path.read_text(encoding="utf-8").splitlines(keepends=True)
         if line > len(lines):

@@ -45,7 +45,7 @@ createApp({
         saveMermaidNodeTitle, saveMermaidEdgeTitle,
         loadFile: (path, base, options) => loadFile(path, base, options), showError: (e) => showError(e)
       });
-    const maxGraphAdd = createMaxGraphAddController({ getPath: () => currentPath.value, history: maxGraphEditHistory, loadFile: (path, base, options) => loadFile(path, base, options), showError: (e) => showError(e) });
+    const maxGraphAdd = createMaxGraphAddController({ getPath: () => currentPath.value, history: maxGraphEditHistory, loadFile: (path, base, options) => loadFile(path, base, options), showError: (e) => showError(e) }); const mermaidAdd = createMermaidAddController({ getPath: () => currentPath.value, history: maxGraphEditHistory, loadFile: (path, base, options) => loadFile(path, base, options), showError: (e) => showError(e) });
 
     const updateMaxGraphNodePosition = async ({ diagram, node, nodeId, previousX, previousY, x, y }) => {
       node.classList.add('maxgraph-node-saving');
@@ -153,8 +153,8 @@ createApp({
           payload = await applyMermaidHistoryEdit(edit, direction);
         } else if (edit.kind === 'mermaid-edge-title') {
           payload = await applyMermaidEdgeHistoryEdit(edit, direction);
-        } else if (!(payload = await maxGraphAdd.applyHistoryEdit(edit, direction))) {
-          return false; // node-add / edge-add: undo deletes, redo re-adds; null = unhandled.
+        } else if (!(payload = (await mermaidAdd.applyHistoryEdit(edit, direction)) || (await maxGraphAdd.applyHistoryEdit(edit, direction)))) {
+          return false; // mermaid/maxgraph add: undo restores prev source / deletes, redo replays; null = unhandled.
         }
         await loadFile(payload.path || edit.path, '', { replaceUrl: true });
         return true;
@@ -212,7 +212,7 @@ createApp({
         getPath: () => currentPath.value, loadFile: (p, b, o) => loadFile(p, b, o), showError: (e) => showError(e)
       });
       setupMermaidZoomPan();
-      bindMermaidDiagramTitles(updateMermaidNodeTitle, updateMermaidEdgeTitle);
+      bindMermaidDiagramTitles(updateMermaidNodeTitle, updateMermaidEdgeTitle); bindMermaidDiagramSelection(); bindMermaidDiagramAddControls(mermaidAdd);
     };
 
     let latestRenderRequestId = 0;
@@ -476,7 +476,7 @@ createApp({
     scheduleAutoRefresh(); initContentSearch(window);
     const newFilesController = createNewFilesController({ ref, computed, loadFile });
     newFilesController.startNewFilesPolling();
-    return { ...newFilesController, ...createFileDropdownCollapse({ fileOptions, ref, computed, getDropdownScrollEl: () => findDropdownScrollEl(), restoreDropdownScroll: createScrollRestorer({ nextTick, requestAnimationFrame: typeof requestAnimationFrame === 'function' ? requestAnimationFrame : null }) }), ...nav, ...createContentFontScale({ ref, computed }),
+    return { ...newFilesController, ...createFileDropdownCollapse({ fileOptions, ref, computed, getDropdownScrollEl: () => findDropdownScrollEl(), restoreDropdownScroll: createScrollRestorer({ nextTick, requestAnimationFrame: typeof requestAnimationFrame === 'function' ? requestAnimationFrame : null }), currentPath }), ...nav, ...createContentFontScale({ ref, computed }),
       targetPath,
       currentPath,
       fileSelectStyle,

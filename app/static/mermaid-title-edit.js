@@ -65,8 +65,10 @@ const bindMermaidDiagramTitleEditing = (diagram, onNodeTitleChange) => {
       foreignObject.setAttribute('class', 'mermaid-node-title-editor-foreign');
       foreignObject.setAttribute('x', box.x);
       foreignObject.setAttribute('y', box.y);
-      foreignObject.setAttribute('width', Math.max(box.width, 24));
-      foreignObject.setAttribute('height', Math.max(box.height, 24));
+      // Floor the editor to a minimum editing area of 150 x 50 so a small node box still
+      // opens a usable editor.
+      foreignObject.setAttribute('width', Math.max(box.width, 150));
+      foreignObject.setAttribute('height', Math.max(box.height, 50));
 
       const editor = document.createElement('textarea');
       editor.className = 'mermaid-node-title-editor';
@@ -110,6 +112,14 @@ const bindMermaidDiagramTitleEditing = (diagram, onNodeTitleChange) => {
       foreignObject.appendChild(editor);
       node.appendChild(foreignObject);
       editor.addEventListener('blur', saveTitle, { once: true });
+      editor.addEventListener('keydown', (event) => {
+        // Escape commits the edit (same as blur); consumed so it does not reach the canvas
+        // Escape handlers (selection clear / pick-mode cancel).
+        if (event.key !== 'Escape') return;
+        event.preventDefault();
+        event.stopPropagation();
+        saveTitle();
+      });
       window.setTimeout(() => {
         editor.focus();
         editor.select();
@@ -173,6 +183,65 @@ const readMermaidEdgeTitle = (labelGroup) => {
   return (label.textContent || '').trim();
 };
 
+// Lay a wide transparent hit band over a thin mermaid edge connector path (mirroring the maxGraph
+// `.maxgraph-edge-hit` overlay) so the edge is easy to double-click without thickening the visible
+// stroke. The band copies the path geometry and is inserted as the path's next sibling, so the edge
+// labels and nodes (painted in later groups) stay on top and clickable. It is tagged
+// `mermaid-edge-hit` so the edge-path query (`:not(.mermaid-edge-hit)`) never re-counts it as an
+// edge on an idempotent re-bind. Returns null (no band) for a path with no geometry.
+const createMermaidEdgeHitBand = (edgePath) => {
+  const geometry = edgePath.getAttribute('d');
+  if (!geometry || !edgePath.parentNode) return null;
+  const hit = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  hit.setAttribute('d', geometry);
+  hit.setAttribute('class', 'mermaid-edge-hit mermaid-edge-editable');
+  edgePath.parentNode.insertBefore(hit, edgePath.nextSibling);
+  return hit;
+};
+
+// Project a pointer event into the svg root's user-coordinate space (accounting for the zoom/pan
+// transform on the .mermaid-pan wrapper), mirroring the maxGraph edge-line editor's pointer
+// projection. Used to anchor the editor for an untitled edge, whose empty label group carries no
+// position of its own.
+const projectMermaidPointToSvg = (svg, event) => {
+  const point = svg.createSVGPoint();
+  point.x = event.clientX;
+  point.y = event.clientY;
+  const matrix = svg.getScreenCTM();
+  if (!matrix) return point;
+  return point.matrixTransform(matrix.inverse());
+};
+
+// Map an element's local getBBox rectangle into the svg root's user-coordinate space, so the editor
+// can be appended to the svg root — painting above the nodes group — while still sitting exactly over
+// the element. The corners are routed element-local -> screen -> svg-root-user-space via
+// `svg.getScreenCTM().inverse() * element.getScreenCTM()`; element.getCTM() is NOT usable here because
+// it maps to the nearest viewport's *post-viewBox* space, folding the root svg's viewBox transform
+// (scale + min-x/y offset) into the result, whereas the appended foreignObject's x/y live in the
+// pre-viewBox user space — that mismatch shifted a titled-edge editor up-left under any non-identity
+// viewBox. Going through screen space cancels the viewBox transform (and the .mermaid-pan zoom/pan
+// transform, an ancestor of both), matching the untitled-edge projectMermaidPointToSvg path.
+const mermaidBoxToSvgSpace = (svg, element, box) => {
+  const screen = svg.getScreenCTM();
+  const elementScreen = element.getScreenCTM();
+  if (!screen || !elementScreen) return { x: box.x, y: box.y, width: box.width, height: box.height };
+  const matrix = screen.inverse().multiply(elementScreen);
+  const topLeft = svg.createSVGPoint();
+  topLeft.x = box.x;
+  topLeft.y = box.y;
+  const bottomRight = svg.createSVGPoint();
+  bottomRight.x = box.x + box.width;
+  bottomRight.y = box.y + box.height;
+  const a = topLeft.matrixTransform(matrix);
+  const b = bottomRight.matrixTransform(matrix);
+  return {
+    x: Math.min(a.x, b.x),
+    y: Math.min(a.y, b.y),
+    width: Math.abs(b.x - a.x),
+    height: Math.abs(b.y - a.y)
+  };
+};
+
 const bindMermaidDiagramEdgeTitleEditing = (diagram, onEdgeTitleChange) => {
   if (!onEdgeTitleChange) return;
   const svg = diagram.querySelector('svg');
@@ -187,7 +256,8 @@ const bindMermaidDiagramEdgeTitleEditing = (diagram, onEdgeTitleChange) => {
     if (identity) knownNodeIds.add(identity.nodeId);
   });
 
-  const pathIds = Array.from(svg.querySelectorAll('g.edgePaths > path')).map((path) => path.getAttribute('id'));
+  const edgePaths = Array.from(svg.querySelectorAll('g.edgePaths > path:not(.mermaid-edge-hit)'));
+  const pathIds = edgePaths.map((path) => path.getAttribute('id'));
   const endpoints = pathIds.map((id) => parseMermaidEdgeEndpoints(id, svgId, knownNodeIds));
   const labelGroups = Array.from(svg.querySelectorAll('g.edgeLabels > g.edgeLabel'));
 
@@ -202,10 +272,6 @@ const bindMermaidDiagramEdgeTitleEditing = (diagram, onEdgeTitleChange) => {
       edgeIndex = ordinal;
     }
 
-    if (labelGroup.dataset.mermaidEdgeEditBound === 'true') return;
-    labelGroup.dataset.mermaidEdgeEditBound = 'true';
-    labelGroup.classList.add('mermaid-edge-editable');
-
     const endpoint = endpoints[domIndex] || null;
     let occurrence = 0;
     if (endpoint) {
@@ -215,20 +281,44 @@ const bindMermaidDiagramEdgeTitleEditing = (diagram, onEdgeTitleChange) => {
       }
     }
 
-    labelGroup.addEventListener('dblclick', (event) => {
+    // Identity tag read by the canvas delete-pick (mermaid-add.js) via `data-mermaid-edge`.
+    const edgeTag = (diagramType !== 'flowchart' || endpoint) ? JSON.stringify({ source: endpoint ? endpoint.source : '', target: endpoint ? endpoint.target : '', occurrence, edgeIndex }) : null;
+
+    // Shared by the label dblclick and the connector-line dblclick: an untitled edge renders only an
+    // empty label group (nothing to double-click), so double-clicking the connector path opens the
+    // same editor anchored at that (empty) label group and an empty save clears the label.
+    const openEdgeEditor = (event) => {
       event.preventDefault();
       event.stopPropagation();
-      if (labelGroup.querySelector('.mermaid-edge-title-editor-foreign')) return;
+      // The editor is appended to the svg root (so it paints above the nodes group — see below), so
+      // the single-open re-entry guard checks the svg, not the label group.
+      if (svg.querySelector('.mermaid-edge-title-editor-foreign')) return;
       if (diagramType === 'flowchart' && !endpoint) return;
 
       const originalTitle = readMermaidEdgeTitle(labelGroup);
-      const box = labelGroup.getBBox();
+      // A titled edge reuses its rendered label box, mapped into the svg root's user space; an
+      // untitled edge renders an empty, position-less label group at the svg origin (no transform,
+      // getBBox 0×0), so anchor a blank editor at the projected double-click point instead — without
+      // this an untitled-edge editor would open at the diagram's top-left corner (mirrors maxGraph).
+      const labelBox = labelGroup.getBBox();
+      let box;
+      if (labelBox.width > 0 && labelBox.height > 0) {
+        box = mermaidBoxToSvgSpace(svg, labelGroup, labelBox);
+      } else {
+        const point = projectMermaidPointToSvg(svg, event);
+        // Default to the 150 x 50 minimum so the blank editor stays centred on the click point.
+        const width = 150;
+        const height = 50;
+        box = { x: point.x - width / 2, y: point.y - height / 2, width, height };
+      }
       const foreignObject = document.createElementNS('http://www.w3.org/2000/svg', 'foreignObject');
       foreignObject.setAttribute('class', 'mermaid-edge-title-editor-foreign');
       foreignObject.setAttribute('x', box.x);
       foreignObject.setAttribute('y', box.y);
-      foreignObject.setAttribute('width', Math.max(box.width, 48));
-      foreignObject.setAttribute('height', Math.max(box.height, 24));
+      // Floor the editor to a minimum editing area of 150 x 50 so a short/untitled edge label
+      // still opens a usable editor.
+      foreignObject.setAttribute('width', Math.max(box.width, 150));
+      foreignObject.setAttribute('height', Math.max(box.height, 50));
 
       const editor = document.createElement('textarea');
       editor.className = 'mermaid-edge-title-editor';
@@ -244,7 +334,9 @@ const bindMermaidDiagramEdgeTitleEditing = (diagram, onEdgeTitleChange) => {
         if (saveStarted) return;
         saveStarted = true;
         editor.removeEventListener('blur', saveTitle);
-        if (editor.value === originalTitle || editor.value === '') {
+        // Only an unchanged value cancels; an emptied value is a real change that clears the label
+        // (an already-empty edge left empty is unchanged, so it still closes without a write).
+        if (editor.value === originalTitle) {
           closeEditor();
           return;
         }
@@ -272,13 +364,38 @@ const bindMermaidDiagramEdgeTitleEditing = (diagram, onEdgeTitleChange) => {
 
       labelGroup.classList.add('mermaid-edge-title-editing');
       foreignObject.appendChild(editor);
-      labelGroup.appendChild(foreignObject);
+      // Append to the svg root, not the label group: mermaid paints the major groups in document
+      // order (clusters, edgePaths, edgeLabels, nodes), so an editor inside g.edgeLabels would be
+      // occluded by any overlapping node. As the svg's last child it paints on top of everything.
+      svg.appendChild(foreignObject);
       editor.addEventListener('blur', saveTitle, { once: true });
+      editor.addEventListener('keydown', (event) => {
+        // Escape commits the edit (same as blur); consumed so it does not reach the canvas
+        // Escape handlers (selection clear / pick-mode cancel).
+        if (event.key !== 'Escape') return;
+        event.preventDefault();
+        event.stopPropagation();
+        saveTitle();
+      });
       window.setTimeout(() => {
         editor.focus();
         editor.select();
       }, 0);
-    });
+    };
+
+    if (labelGroup.dataset.mermaidEdgeEditBound !== 'true') {
+      labelGroup.dataset.mermaidEdgeEditBound = 'true'; labelGroup.classList.add('mermaid-edge-editable');
+      labelGroup.addEventListener('dblclick', openEdgeEditor); if (edgeTag) labelGroup.dataset.mermaidEdge = edgeTag;
+    }
+
+    const edgePath = edgePaths[domIndex];
+    if (edgePath && edgePath.dataset.mermaidEdgeEditBound !== 'true') {
+      edgePath.dataset.mermaidEdgeEditBound = 'true'; edgePath.classList.add('mermaid-edge-editable');
+      edgePath.addEventListener('dblclick', openEdgeEditor); if (edgeTag) edgePath.dataset.mermaidEdge = edgeTag;
+      // A wide transparent hit band over the thin connector makes the edge easy to double-click.
+      const hit = createMermaidEdgeHitBand(edgePath);
+      if (hit) { hit.addEventListener('dblclick', openEdgeEditor); if (edgeTag) hit.dataset.mermaidEdge = edgeTag; }
+    }
   });
 };
 

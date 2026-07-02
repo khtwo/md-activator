@@ -28,3 +28,17 @@
 .viewer-file-option-toggle-icon:hover {
   background: rgba(0, 0, 0, 0.08);
 }
+
+/* Non-clickable current-folder header pinned above the option list (QSelect before-options slot).
+   Shows the folder whose contents are listed, e.g. "docs/api/". Uses the same font family and size
+   as the option rows (font-size inherited, not shrunk); dimmed and never interactive (default
+   cursor) so it reads as a location label rather than a selectable row. */
+.viewer-file-current-path {
+  padding: 4px 12px;
+  font-size: inherit;
+  opacity: 0.7;
+  cursor: default;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

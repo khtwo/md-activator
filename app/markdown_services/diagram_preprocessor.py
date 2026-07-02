@@ -36,6 +36,7 @@ from .maxgraph_xml_rewriter import MaxGraphXmlRewriter
 from .mermaid_block_preparation import MermaidBlockPreparation
 from .mermaid_edge_title_rewriter import MermaidEdgeTitleRewriter
 from .mermaid_node_title_rewriter import MermaidNodeTitleRewriter
+from .mermaid_structure_rewriter import MermaidStructureRewriter
 
 
 class DiagramPreprocessor:
@@ -83,6 +84,14 @@ class DiagramPreprocessor:
         # circular dependency), so both are injected as callables to keep one source
         # of truth.
         self._mermaid_edge_title_rewriter = MermaidEdgeTitleRewriter(
+            self._mermaid_node_title_rewriter._format_mermaid_label,
+            self._format_mermaid_edge_label_raw,
+        )
+        # The mermaid structure write-back cluster (add node / add edge source synthesis) is a
+        # pure, stateless concern; it lives on its own collaborator and reuses the same two label
+        # formatters (injected to keep one source of truth). The structure surface below forwards
+        # to it.
+        self._mermaid_structure_rewriter = MermaidStructureRewriter(
             self._mermaid_node_title_rewriter._format_mermaid_label,
             self._format_mermaid_edge_label_raw,
         )
@@ -204,6 +213,51 @@ class DiagramPreprocessor:
         edge-title-editing tests call it here."""
         return self._mermaid_edge_title_rewriter._update_mermaid_block_edge_title(
             block_text, diagram_type, source, target, occurrence, edge_index, title
+        )
+
+    # ------------------------------------------------------------------ #
+    # Mermaid structure write-back (delegated to MermaidStructureRewriter)
+    # ------------------------------------------------------------------ #
+    def _generate_mermaid_node_id(self, block_text: str) -> str:
+        """Forward to the mermaid structure rewriter collaborator (unique New_<n> id)."""
+        return self._mermaid_structure_rewriter._generate_mermaid_node_id(block_text)
+
+    def _add_mermaid_block_node(
+        self, block_text: str, diagram_type: str, node_id: str, title: str = "New"
+    ) -> str:
+        """Forward to the mermaid structure rewriter collaborator (append a node declaration)."""
+        return self._mermaid_structure_rewriter._add_mermaid_block_node(
+            block_text, diagram_type, node_id, title
+        )
+
+    def _add_mermaid_block_edge(
+        self, block_text: str, diagram_type: str, source: str, target: str
+    ) -> str:
+        """Forward to the mermaid structure rewriter collaborator (append an edge line)."""
+        return self._mermaid_structure_rewriter._add_mermaid_block_edge(
+            block_text, diagram_type, source, target
+        )
+
+    def _delete_mermaid_block_nodes(
+        self, block_text: str, diagram_type: str, node_ids: list[str]
+    ) -> str:
+        """Forward to the mermaid structure rewriter collaborator (delete nodes + cascade edges)."""
+        return self._mermaid_structure_rewriter._delete_mermaid_block_nodes(
+            block_text, diagram_type, node_ids
+        )
+
+    def _delete_mermaid_block_edge(
+        self,
+        block_text: str,
+        diagram_type: str,
+        source: str,
+        target: str,
+        occurrence: int,
+        edge_index: int,
+    ) -> str:
+        """Forward to the mermaid structure rewriter collaborator (delete one edge)."""
+        return self._mermaid_structure_rewriter._delete_mermaid_block_edge(
+            block_text, diagram_type, source, target, occurrence, edge_index
         )
 
     def _format_mermaid_edge_label_raw(self, title: str) -> str:

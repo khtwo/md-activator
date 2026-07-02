@@ -9,10 +9,11 @@ This module backs the "new `.md` files" notification surface specified in
   10-per-page slices with counts for the badge. The span counts only calendar days that
   actually contain ``.md`` files (empty days are skipped); it defaults to
   :data:`DEFAULT_SPAN_DAYS` and is set per session by the ``--span`` CLI flag.
-- :class:`ViewedRegistry` persists the set of files the user has already opened to a
-  fixed per-user JSON file (``~/.md-activator/md-activator-viewed.json``) keyed by
-  absolute path, so the unviewed (bold) vs viewed (normal) distinction survives a server
-  restart and carries across changes of the served working folder.
+- :class:`ViewedRegistry` persists each opened file's **last-view timestamp** to a fixed
+  per-user JSON file (``~/.md-activator/md-activator-viewed.json``) keyed by absolute path.
+  A file is viewed (normal weight) only while its last-view timestamp is at or after its
+  activity time, so a file edited after it was last viewed resurfaces as unviewed (bold).
+  The state survives a server restart and carries across changes of the served working folder.
 
 The lower bound is local midnight of the span-th most recent populated day. It is computed
 once, on the first scan that finds at least one ``.md`` file, and is fixed for that session,
@@ -46,7 +47,11 @@ DEFAULT_SPAN_DAYS = 3
 SPAN_DAYS_ENV = "MD_VIEWER_SPAN_DAYS"
 # Notification dropdown page size.
 NEW_FILES_PAGE_SIZE = 10
-# Fixed per-user registry holding the persisted viewed-files set. It lives in the user's
+# At most one desktop change-notification is raised within this many seconds. Change events
+# detected inside the window coalesce into the single notification already raised (they are
+# still absorbed into the cached collection, but do not raise their own popup).
+NOTIFY_THROTTLE_SECONDS = 3.0
+# Fixed per-user registry holding the persisted per-file last-view timestamps. It lives in the user's
 # home directory (NOT inside the served content root) so a single registry is shared across
 # every served folder; entries are stored as absolute paths so viewed state carries across
 # working-folder changes (a file's relative path differs per root, its absolute path does not).
@@ -272,28 +277,43 @@ class NewFileEntry:
 
 
 class ViewedRegistry:
-    """Persisted set of viewed files, stored as ABSOLUTE paths in a fixed per-user file.
+    """Persisted per-file last-view timestamp, keyed by ABSOLUTE path in a fixed per-user file.
 
-    The on-disk format is ``{"viewed": ["<absolute/posix/path>", ...]}`` at a single
-    per-user location (default :func:`default_registry_path`), shared by every served
-    folder. Storing absolute paths means viewed state carries across working-folder changes:
-    the same physical file has a different content-root-relative path under a different root,
-    but the same absolute path.
+    The on-disk format is ``{"viewed": {"<absolute/posix/path>": <epoch_seconds>, ...}}`` at a
+    single per-user location (default :func:`default_registry_path`), shared by every served
+    folder. Each value is the epoch-seconds time the file was last opened. Storing absolute
+    paths means viewed state carries across working-folder changes: the same physical file has
+    a different content-root-relative path under a different root, but the same absolute path.
+
+    The timestamp — not mere membership — is what lets a file resurface as unviewed after it is
+    edited: the service compares a file's last-view timestamp against its activity time (the
+    later of creation and modification), so a file modified after it was last viewed is treated
+    as unviewed again until reopened.
 
     The service works in content-root-relative posix paths; this registry is the translation
     boundary. ``mark_viewed``/``is_viewed`` take a relative path and translate it to absolute
-    against ``root_dir``; ``viewed_set`` projects the stored absolute set back to the relative
+    against ``root_dir``; ``viewed_times`` projects the stored absolute map back to the relative
     paths *under the current root* (entries elsewhere belong to other folders and are skipped).
 
-    The absolute set is loaded lazily and cached in memory; ``mark_viewed`` writes through to
-    disk only when the entry is new (idempotent). A missing or corrupt file is treated as an
-    empty set so a hand-edited or partially-written registry never breaks listing.
+    The absolute map is loaded lazily and cached in memory; ``mark_viewed`` records ``clock()``
+    and writes through to disk unless the stored value is unchanged (idempotent for a fixed
+    clock). A missing or corrupt file is treated as empty so a hand-edited or partially-written
+    registry never breaks listing. An older flat-list registry (``{"viewed": ["<abs>", ...]}``,
+    no timestamps) is migrated on load to ``{path: clock()}`` — read as viewed *as of load* — so
+    upgrading does not turn every previously-viewed file bold at once.
     """
 
-    def __init__(self, root_dir: Path, *, registry_path: Path | None = None) -> None:
+    def __init__(
+        self,
+        root_dir: Path,
+        *,
+        registry_path: Path | None = None,
+        clock: Callable[[], float] = time.time,
+    ) -> None:
         self._root_dir = root_dir.resolve()
         self._registry_path = (registry_path or default_registry_path()).resolve()
-        self._viewed: set[str] | None = None  # absolute posix paths
+        self._clock = clock
+        self._viewed: dict[str, float] | None = None  # absolute posix path -> last-view epoch
 
     @property
     def root_dir(self) -> Path:
@@ -302,7 +322,7 @@ class ViewedRegistry:
     @root_dir.setter
     def root_dir(self, value: Path) -> None:
         # Only the relative<->absolute translation root changes; the registry file is fixed,
-        # so the loaded absolute set stays valid and is not reloaded.
+        # so the loaded absolute map stays valid and is not reloaded.
         self._root_dir = value.resolve()
 
     @property
@@ -312,71 +332,87 @@ class ViewedRegistry:
     def _to_absolute(self, relative_path: str) -> str:
         return (self._root_dir / relative_path).as_posix()
 
-    def _absolute_set(self) -> set[str]:
+    def _viewed_map(self) -> dict[str, float]:
         if self._viewed is None:
             self._viewed = self._load()
         return self._viewed
 
-    def viewed_set(self) -> set[str]:
-        """Viewed files as content-root-relative posix paths under the current root.
+    def viewed_times(self) -> dict[str, float]:
+        """Last-view timestamps keyed by content-root-relative posix path under the current root.
 
         Stored entries outside the current root (other served folders) are skipped, so the
         shared registry never leaks unrelated files into this listing.
         """
-        relatives: set[str] = set()
-        for absolute in self._absolute_set():
+        relatives: dict[str, float] = {}
+        for absolute, timestamp in self._viewed_map().items():
             try:
                 relative = Path(absolute).relative_to(self._root_dir)
             except ValueError:
                 continue
-            relatives.add(relative.as_posix())
+            relatives[relative.as_posix()] = timestamp
         return relatives
 
-    def is_viewed(self, relative_path: str) -> bool:
-        return self._to_absolute(relative_path) in self._absolute_set()
+    def is_viewed(self, relative_path: str, activity_epoch: float) -> bool:
+        """Whether *relative_path* was last viewed at or after *activity_epoch* (so not new)."""
+        timestamp = self._viewed_map().get(self._to_absolute(relative_path))
+        return timestamp is not None and timestamp >= activity_epoch
 
     def mark_viewed(self, relative_path: str) -> None:
         absolute = self._to_absolute(relative_path)
-        viewed = self._absolute_set()
-        if absolute in viewed:
+        viewed = self._viewed_map()
+        timestamp = self._clock()
+        if viewed.get(absolute) == timestamp:
             return
-        viewed.add(absolute)
+        viewed[absolute] = timestamp
         self._save(viewed)
 
     def mark_all_viewed(self, relative_paths: Sequence[str]) -> None:
-        """Mark a batch of relative paths viewed, writing through to disk once if any are new.
+        """Record one ``clock()`` snapshot as the last-view time for a batch of relative paths,
+        writing through to disk once if any value changes.
 
         Equivalent to :meth:`mark_viewed` per path but persists a single time, so marking a
         whole multi-page list is one disk write. Idempotent: a no-op (no write) when every path
-        is already recorded.
+        is already recorded at this clock value.
         """
-        viewed = self._absolute_set()
-        added = False
+        viewed = self._viewed_map()
+        timestamp = self._clock()
+        changed = False
         for relative_path in relative_paths:
             absolute = self._to_absolute(relative_path)
-            if absolute not in viewed:
-                viewed.add(absolute)
-                added = True
-        if added:
+            if viewed.get(absolute) != timestamp:
+                viewed[absolute] = timestamp
+                changed = True
+        if changed:
             self._save(viewed)
 
-    def _load(self) -> set[str]:
+    def _load(self) -> dict[str, float]:
         try:
             raw = self._registry_path.read_text(encoding="utf-8")
         except OSError:
-            return set()
+            return {}
         try:
             data = json.loads(raw)
         except (ValueError, TypeError):
-            return set()
-        if isinstance(data, dict):
-            data = data.get("viewed", [])
-        if not isinstance(data, list):
-            return set()
-        return {str(item) for item in data}
+            return {}
+        viewed = data.get("viewed") if isinstance(data, dict) else data
+        if isinstance(viewed, dict):
+            # Current format: {path: epoch}. Coerce values to float, dropping unparseable ones.
+            result: dict[str, float] = {}
+            for key, value in viewed.items():
+                try:
+                    result[str(key)] = float(value)
+                except (TypeError, ValueError):
+                    continue
+            return result
+        if isinstance(viewed, list):
+            # Legacy flat-list format (no timestamps): treat each entry as viewed *as of load*
+            # so an upgrade preserves the prior non-bold state instead of flagging everything.
+            now = self._clock()
+            return {str(item): now for item in viewed}
+        return {}
 
-    def _save(self, viewed: set[str]) -> None:
-        payload = {"viewed": sorted(viewed)}
+    def _save(self, viewed: dict[str, float]) -> None:
+        payload = {"viewed": {path: viewed[path] for path in sorted(viewed)}}
         self._registry_path.parent.mkdir(parents=True, exist_ok=True)
         self._registry_path.write_text(
             json.dumps(payload, indent=2, ensure_ascii=False),
@@ -398,6 +434,8 @@ class NewFilesService:
         ignored_paths: IgnoredPaths = git_ignored_paths,
         content_filter: Callable[[Path], bool] | None = None,
         priority_filter: Callable[[Path], bool] | None = None,
+        notifier: Callable[[str], None] | None = None,
+        notify_interval: float = NOTIFY_THROTTLE_SECONDS,
     ) -> None:
         self._root_dir = root_dir.resolve()
         # Per-file representative epoch (the later of creation/modification — see
@@ -409,7 +447,7 @@ class NewFilesService:
         # the files present, so it cannot be computed here; it is resolved and frozen on the
         # first scan that finds a file (R-SPAN-4), then fixed for the session.
         self._threshold: float | None = None
-        self._viewed = viewed_registry or ViewedRegistry(self._root_dir)
+        self._viewed = viewed_registry or ViewedRegistry(self._root_dir, clock=clock)
         # Seam for git-ignore filtering (R8); injectable for deterministic tests.
         self._ignored_paths = ignored_paths
         # Optional content predicate: when set, only files it accepts are listed. ``None``
@@ -420,6 +458,15 @@ class NewFilesService:
         # tagged ``needs_review`` and floated to the front of the order (review-first), so the
         # notification list shows files awaiting confirmation before ordinary new files.
         self._priority_filter = priority_filter
+        # Optional desktop-notification sink: called with a ready-to-display message when the
+        # detector finds .md files created/changed after the session baseline (the previously
+        # cached set). None (the default) disables notifications, so the service and its unit
+        # tests stay side-effect-free unless a notifier is wired in. Emission is throttled to
+        # one call per ``notify_interval`` seconds (measured on ``self._clock``); bursts
+        # coalesce into the single notification already raised.
+        self._notifier = notifier
+        self._notify_interval = notify_interval
+        self._last_notified_at: float | None = None
         # Cached scan result (R9): paging slices this; only detect() refreshes it. Guarded
         # by a lock because the poll (detector) may refresh it while a page request reads it.
         self._cache: list[_ScannedFile] | None = None
@@ -524,16 +571,26 @@ class NewFilesService:
         self._threshold = populated_days[min(self._span_days, len(populated_days)) - 1]
         return self._threshold
 
+    @staticmethod
+    def _is_viewed(record: _ScannedFile, viewed_times: dict[str, float]) -> bool:
+        """Whether *record* was last viewed at or after its activity time (so not new/bold).
+
+        A file with no recorded view, or one whose recorded view predates its activity time
+        (i.e. it was modified after it was last viewed), is unviewed and renders bold.
+        """
+        timestamp = viewed_times.get(record.path)
+        return timestamp is not None and timestamp >= record.created_epoch
+
     def list_entries(self) -> list[NewFileEntry]:
         """Fresh scan overlaid with the live viewed flag (used internally and by tests)."""
-        viewed = self._viewed.viewed_set()
+        viewed_times = self._viewed.viewed_times()
         return [
             NewFileEntry(
                 path=record.path,
                 name=record.name,
                 created_epoch=record.created_epoch,
                 created_display=record.created_display,
-                viewed=record.path in viewed,
+                viewed=self._is_viewed(record, viewed_times),
                 needs_review=record.needs_review,
             )
             for record in self._scan_records()
@@ -544,23 +601,90 @@ class NewFilesService:
 
         This is the only path that rescans on demand (the poll/detector calls it, R9.3).
         The scan runs outside the lock; the compare-and-swap is brief and under the lock.
+
+        When a ``notifier`` is wired and a baseline already exists (the cache was previously
+        populated), files created or changed since that baseline raise a throttled desktop
+        notification. The first scan of a session seeds the baseline **silently** (previous is
+        ``None``), so the pre-existing backlog never notifies. The message is computed under the
+        lock (it reads/updates the throttle timestamp) but the notifier is called outside it.
         """
         records = self._scan_records()
+        body: str | None = None
         with self._lock:
-            if self._cache is not None and self._cache == records:
+            previous = self._cache
+            if previous is not None and previous == records:
                 return False
             self._cache = records
-            return True
+            # Only notify once a baseline exists; the first (previous is None) scan just seeds it.
+            if self._notifier is not None and previous is not None:
+                body = self._select_notification(previous, records)
+        if body is not None:
+            self._notifier(body)
+        return True
+
+    def _select_notification(
+        self, previous: list[_ScannedFile], current: list[_ScannedFile]
+    ) -> str | None:
+        """Return a throttled notification body for files created/changed vs *previous*, or None.
+
+        Returns None when there are no created/changed candidates, or when a notification was
+        already raised within ``notify_interval`` seconds (bursts coalesce into that one). When a
+        notification is due, records the send time (``self._clock``) and returns the message.
+        Runs under ``self._lock`` (it guards ``_last_notified_at``).
+        """
+        candidates = self._new_change_candidates(previous, current)
+        if not candidates:
+            return None
+        now = self._clock()
+        if self._last_notified_at is not None and now - self._last_notified_at < self._notify_interval:
+            return None
+        self._last_notified_at = now
+        return self._format_notification(candidates)
 
     @staticmethod
-    def _compute_version(records: list[_ScannedFile], viewed: set[str]) -> str:
+    def _new_change_candidates(
+        previous: list[_ScannedFile], current: list[_ScannedFile]
+    ) -> list[tuple[_ScannedFile, str]]:
+        """Files in *current* created or changed relative to *previous*, each with its verb.
+
+        ``created`` when the path is absent from *previous*; ``changed`` when the path is present
+        but its activity epoch increased (the file was modified after the session last saw it). A
+        merely re-ordered or removed file is not a candidate.
+        """
+        previous_epoch = {record.path: record.created_epoch for record in previous}
+        candidates: list[tuple[_ScannedFile, str]] = []
+        for record in current:
+            prior = previous_epoch.get(record.path)
+            if prior is None:
+                candidates.append((record, "created"))
+            elif record.created_epoch > prior:
+                candidates.append((record, "changed"))
+        return candidates
+
+    @staticmethod
+    def _format_notification(candidates: list[tuple[_ScannedFile, str]]) -> str:
+        """Build the notification body: the newest candidate's path plus a count of the rest.
+
+        One candidate → ``"<relative/path> is created"`` / ``"… is changed"``. More than one →
+        ``"<newest relative/path> and <N> more file(s) changed"`` — the most recently active
+        candidate is named and the remainder summarized ("file" when N is 1, else "files").
+        """
+        newest, verb = max(candidates, key=lambda item: item[0].created_epoch)
+        if len(candidates) == 1:
+            return f"{newest.path} is {verb}"
+        others = len(candidates) - 1
+        noun = "file" if others == 1 else "files"
+        return f"{newest.path} and {others} more {noun} changed"
+
+    @staticmethod
+    def _compute_version(records: list[_ScannedFile], viewed_times: dict[str, float]) -> str:
         """Hash the records plus their live viewed flags (R10.1).
 
         Changes when a file is added/removed/re-ordered or a listed file's viewed state
         flips, so it captures everything the client renders.
         """
         signature = "".join(
-            f"{record.path}{record.created_epoch!r}{'1' if record.path in viewed else '0'}{'1' if record.needs_review else '0'}"
+            f"{record.path}{record.created_epoch!r}{'1' if NewFilesService._is_viewed(record, viewed_times) else '0'}{'1' if record.needs_review else '0'}"
             for record in records
         )
         return hashlib.sha1(signature.encode("utf-8")).hexdigest()
@@ -571,7 +695,7 @@ class NewFilesService:
             if self._cache is None:
                 self._cache = self._scan_records()
             records = self._cache
-        return self._compute_version(records, self._viewed.viewed_set())
+        return self._compute_version(records, self._viewed.viewed_times())
 
     def page(self, page: int = 1, page_size: int = NEW_FILES_PAGE_SIZE) -> dict[str, object]:
         # Serve from the cache; build it once if it has never been populated (R9.2). Paging
@@ -581,15 +705,19 @@ class NewFilesService:
                 self._cache = self._scan_records()
             records = self._cache
 
-        # Overlay viewed state from the live registry (R9.4) so it is never stale.
-        viewed = self._viewed.viewed_set()
+        # Overlay viewed state from the live registry (R9.4) so it is never stale. Viewed is
+        # relative to each file's activity time, so a file modified after its last view counts
+        # as unviewed again.
+        viewed_times = self._viewed.viewed_times()
         total = len(records)
-        unviewed = sum(1 for record in records if record.path not in viewed)
+        unviewed = sum(1 for record in records if not self._is_viewed(record, viewed_times))
         review_count = sum(1 for record in records if record.needs_review)
         # Badge count: every review file needs action (regardless of viewed), plus the
         # non-review files not yet viewed. The two groups are disjoint, so no double-count.
         unviewed_new = sum(
-            1 for record in records if not record.needs_review and record.path not in viewed
+            1
+            for record in records
+            if not record.needs_review and not self._is_viewed(record, viewed_times)
         )
         attention = review_count + unviewed_new
         page_count = max(1, (total + page_size - 1) // page_size)
@@ -604,14 +732,14 @@ class NewFilesService:
             "unviewedCount": unviewed,
             "reviewCount": review_count,
             "attentionCount": attention,
-            "listVersion": self._compute_version(records, viewed),
+            "listVersion": self._compute_version(records, viewed_times),
             "files": [
                 {
                     "path": record.path,
                     "name": record.name,
                     "created": record.created_display,
                     "createdEpoch": record.created_epoch,
-                    "viewed": record.path in viewed,
+                    "viewed": self._is_viewed(record, viewed_times),
                     "needsReview": record.needs_review,
                 }
                 for record in window

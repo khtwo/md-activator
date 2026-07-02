@@ -42,6 +42,16 @@
   font-weight: 700;
 }
 
+/* Parent folder shown after the filename (e.g. "index.md (docs/api)"). It flows inline inside
+   the 2-line-clamped name box, so it shares the filename's overflow. A direct rule on the span
+   beats the weight it would otherwise inherit from an unviewed (bold) name, keeping the folder
+   secondary: always normal weight and a smaller, dimmer font. */
+.viewer-new-file-path {
+  font-weight: 400;
+  font-size: 0.85em;
+  opacity: 0.7;
+}
+
 /* Clarification rows lead the merged dropdown; a small yellow dot before the filename marks
    each one as a "needs review" item, distinct from the plain new files below. The row is a
    flex line so the dot sits beside the (line-clamped) name. */

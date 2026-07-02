@@ -59,11 +59,13 @@ MERMAID_FLOWCHART_LINK_RE = re.compile(
     r")(?:\|(?P<pipe>[^|]*)\|)?\s*$"
 )
 
-# An erDiagram relationship line: `LEFT <card>--<card> RIGHT : label`. The label after the colon is
-# replaced; `head`/`trail` preserve the surrounding text and whitespace.
+# An erDiagram relationship line: `LEFT <card>--<card> RIGHT` with an OPTIONAL ` : label`. The
+# `: label` is optional because erDiagram relationship labels are optional in mermaid (>= 10.3), so a
+# cleared (label-less) relationship still matches — keeping it counted for ordinals and re-titleable.
+# `relation` is the part before the colon; `sep` (` : `) and `label` are present only when labelled.
 MERMAID_ER_RELATION_RE = re.compile(
-    r"^(?P<head>\s*[A-Za-z0-9_-]+\s*[|}{o]+(?:--|\.\.)[|}{o]+\s+[A-Za-z0-9_-]+\s*:\s*)"
-    r"(?P<label>.*?)(?P<trail>\s*)$"
+    r"^(?P<relation>\s*[A-Za-z0-9_-]+\s*[|}{o]+(?:--|\.\.)[|}{o]+\s+[A-Za-z0-9_-]+)"
+    r"(?:(?P<sep>\s*:\s*)(?P<label>.*?))?(?P<trail>\s*)$"
 )
 
 # A classDiagram relationship line: two class names joined by a relation operator, optionally with
@@ -165,18 +167,46 @@ class MermaidEdgeTitleRewriter:
         raise ValueError("flowchart edge not found for the requested endpoints")
 
     def _rewrite_flowchart_link(self, region: str, parsed: re.Match[str], title: str) -> str:
+        lead = region[: len(region) - len(region.lstrip())]
+        trail = region[len(region.rstrip()) :]
+
         if parsed.group("pipe") is not None:
+            if not title:
+                # Clear: drop the `|label|` pipe (and any whitespace before it) back to a bare arrow.
+                return re.sub(r"\s*\|[^|]*\|", "", region, count=1)
             formatted = self._format_mermaid_label(title)
             return re.sub(r"\|[^|]*\|", f"|{formatted}|", region, count=1)
 
-        lead = region[: len(region) - len(region.lstrip())]
-        trail = region[len(region.rstrip()) :]
         if parsed.group("text") is not None:
+            if not title:
+                # Clear: drop the inline label back to a bare arrow, keeping line style + arrowhead.
+                return f"{lead}{self._bare_flowchart_link(parsed)}{trail}"
             raw = self._format_edge_label_raw(title)
             return f"{lead}{parsed.group('open')} {raw} {parsed.group('close')}{trail}"
 
+        if not title:
+            # Already a bare arrow with no label; clearing is a no-op.
+            return region
         formatted = self._format_mermaid_label(title)
         return f"{lead}{region.strip()}|{formatted}|{trail}"
+
+    @staticmethod
+    def _bare_flowchart_link(parsed: re.Match[str]) -> str:
+        """Rebuild a bare flowchart link operator from a matched inline link's open/close tokens,
+        preserving its line style (solid ``--`` / thick ``==`` / dotted ``-.-``) and closing
+        arrowhead (``>``/``o``/``x``). E.g. ``-- text -->`` -> ``-->``, ``-. text .->`` -> ``-.->``."""
+        open_tok = parsed.group("open") or ""
+        close_tok = parsed.group("close") or ""
+        skeleton = open_tok + close_tok
+        if "=" in skeleton:
+            body = "=="
+        elif "." in skeleton:
+            body = "-.-"
+        else:
+            body = "--"
+        left = open_tok[0] if open_tok[:1] in ("<", "o", "x") else ""
+        right = close_tok[-1] if close_tok[-1:] in (">", "o", "x") else ""
+        return f"{left}{body}{right}"
 
     def _set_er_relationship_label(self, block_text: str, edge_index: int, title: str) -> str:
         lines = block_text.splitlines(keepends=True)
@@ -188,8 +218,15 @@ class MermaidEdgeTitleRewriter:
             if match is None:
                 continue
             if count == edge_index:
-                formatted = self._format_mermaid_label(title)
-                lines[line_index] = f"{match.group('head')}{formatted}{match.group('trail')}{ending}"
+                relation = match.group("relation")
+                if not title:
+                    # Clear: drop the `: label` back to the bare relationship.
+                    lines[line_index] = f"{relation}{ending}"
+                else:
+                    formatted = self._format_mermaid_label(title)
+                    sep = match.group("sep") or " : "
+                    trail = match.group("trail") or ""
+                    lines[line_index] = f"{relation}{sep}{formatted}{trail}{ending}"
                 return "".join(lines)
             count += 1
 
@@ -205,11 +242,15 @@ class MermaidEdgeTitleRewriter:
             if match is None:
                 continue
             if count == edge_index:
-                raw_label = self._format_edge_label_raw(title)
-                if match.group("label") is not None:
-                    lines[line_index] = f"{text[: match.start('label')]}{raw_label}{ending}"
+                if not title:
+                    # Clear: drop the `: label` back to the bare relationship.
+                    lines[line_index] = f"{self._relation_without_label(text, match)}{ending}"
                 else:
-                    lines[line_index] = f"{text.rstrip()} : {raw_label}{ending}"
+                    raw_label = self._format_edge_label_raw(title)
+                    if match.group("label") is not None:
+                        lines[line_index] = f"{text[: match.start('label')]}{raw_label}{ending}"
+                    else:
+                        lines[line_index] = f"{text.rstrip()} : {raw_label}{ending}"
                 return "".join(lines)
             count += 1
 
@@ -225,15 +266,29 @@ class MermaidEdgeTitleRewriter:
             if match is None:
                 continue
             if count == edge_index:
-                raw_label = self._format_edge_label_raw(title)
-                if match.group("label") is not None:
-                    lines[line_index] = f"{text[: match.start('label')]}{raw_label}{ending}"
+                if not title:
+                    # Clear: drop the `: label` back to the bare transition.
+                    lines[line_index] = f"{self._relation_without_label(text, match)}{ending}"
                 else:
-                    lines[line_index] = f"{text.rstrip()} : {raw_label}{ending}"
+                    raw_label = self._format_edge_label_raw(title)
+                    if match.group("label") is not None:
+                        lines[line_index] = f"{text[: match.start('label')]}{raw_label}{ending}"
+                    else:
+                        lines[line_index] = f"{text.rstrip()} : {raw_label}{ending}"
                 return "".join(lines)
             count += 1
 
         raise ValueError("stateDiagram transition not found for the requested index")
+
+    @staticmethod
+    def _relation_without_label(text: str, match: re.Match[str]) -> str:
+        """Return a class/state relationship line stripped of its ` : label` (and the colon).
+
+        ``match`` is a match of the class/state grammar whose optional ``label`` group, when present,
+        spans the text after the ``:``. A label-less line is returned unchanged (idempotent clear)."""
+        if match.group("label") is None:
+            return text.rstrip()
+        return re.sub(r"\s*:\s*$", "", text[: match.start("label")])
 
     # ------------------------------------------------------------------ #
     # Default label formatters (used only when none are injected, so the no-arg

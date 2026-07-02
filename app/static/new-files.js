@@ -11,6 +11,16 @@
 
 const NEW_FILES_POLL_MS = 5_000;
 
+// Parent folder of a content-root-relative posix path (the substring before the last '/'),
+// or '' for a root-level file. Each dropdown row shows it, non-bold and smaller, after the
+// filename so same-named files in different folders are distinguishable; '' lets the template
+// drop the parentheses entirely for a root-level file.
+const newFileParentDir = (path) => {
+  const value = String(path == null ? '' : path);
+  const slash = value.lastIndexOf('/');
+  return slash === -1 ? '' : value.slice(0, slash);
+};
+
 // Clamp a 1-based page request into the valid range for the current page count. An empty
 // list has pageCount 0 but still presents as page 1.
 const clampNewFilesPage = (page, pageCount) => {
@@ -140,6 +150,9 @@ const createFileNotificationController = ({
 const createNewFilesController = ({ ref, computed, loadFile }) => {
   const c = createFileNotificationController({ ref, computed, loadFile, endpoint: '/api/new-files', errorLabel: 'Failed to load new files' });
   return {
+    // Template helper: parent folder of a row's path ('' for a root-level file), shown after
+    // the filename.
+    newFileDir: newFileParentDir,
     newFiles: c.files,
     newFilesPage: c.page,
     newFilesPageCount: c.pageCount,

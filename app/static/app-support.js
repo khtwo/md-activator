@@ -420,10 +420,11 @@ const createScrollRestorer = ({ nextTick, requestAnimationFrame: raf }) => (getE
 
 // Reactive session-only collapse state for the file/folder dropdown, keyed by folder relative path.
 // `ref`/`computed` are passed in so this stays decoupled from the Vue import in app.js.
-const createFileDropdownCollapse = ({ fileOptions, ref, computed, getDropdownScrollEl, restoreDropdownScroll }) => {
+const createFileDropdownCollapse = ({ fileOptions, ref, computed, getDropdownScrollEl, restoreDropdownScroll, currentPath }) => {
   const collapsedFolders = ref(new Set());
   const visibleFileOptions = computed(() => computeVisibleFileOptions(fileOptions.value, collapsedFolders.value));
   const expandableFolderValues = computed(() => collectExpandableFolderValues(fileOptions.value));
+  const currentFolderLabel = computed(() => viewerCurrentFolder(currentPath && currentPath.value) + '/');
   const isFolderExpandable = (option) => !!option && expandableFolderValues.value.has(option.value);
   const isFolderCollapsed = (option) => !!option && collapsedFolders.value.has(option.value);
   // Reassigning collapsedFolders rebuilds visibleFileOptions, which makes Quasar's QSelect re-render its
@@ -471,7 +472,7 @@ const createFileDropdownCollapse = ({ fileOptions, ref, computed, getDropdownScr
     toggleFolderCollapsed(option);
     return true;
   };
-  return { collapsedFolders, visibleFileOptions, isFolderExpandable, isFolderCollapsed, toggleFolderCollapsed, onFileOptionIconClick };
+  return { collapsedFolders, visibleFileOptions, isFolderExpandable, isFolderCollapsed, toggleFolderCollapsed, onFileOptionIconClick, currentFolderLabel };
 };
 
 const isAbsoluteHttpHref = (href) => /^https?:\/\//i.test((href || '').trim());
@@ -479,6 +480,7 @@ const isAbsoluteHttpHref = (href) => /^https?:\/\//i.test((href || '').trim());
 // Extensions that open in the viewer when a local link is clicked: markdown plus
 // the YAML and JSON tree-view extensions. Kept in sync with the backend VIEWER_SUFFIXES.
 const VIEWER_LINK_SUFFIXES = ['.md', '.yml', '.yaml', '.json', '.jsonl'];
+const viewerCurrentFolder = (path) => { const value = String(path == null ? '' : path); return VIEWER_LINK_SUFFIXES.some((suffix) => value.toLowerCase().endsWith(suffix)) ? value.slice(0, Math.max(value.lastIndexOf('/'), 0)) : value; };
 
 const isLocalMarkdownHref = (href) => {
   if (!href) return false;

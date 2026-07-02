@@ -19,7 +19,7 @@ From the repository root:
 
 ```powershell
 .\vsix_package.bat
-code --install-extension .\vscode-extension\vsix-package\md-activator-0.1.4.vsix --force
+code --install-extension .\vscode-extension\vsix-package\md-activator-0.1.5.vsix --force
 ```
 
 The packaging helper installs the root frontend build dependencies, builds the local maxGraph adapter bundle, installs the extension packaging dependencies, and writes the versioned VSIX into `vscode-extension\vsix-package\`.

@@ -47,6 +47,108 @@ const findMaxGraphNodeElement = (svg, nodeId) => (
   )) || null
 );
 
+// Shared inline edge-title editor body, opened by both the edge-label dblclick and the edge-line
+// dblclick. ``container`` is where the foreignObject is appended (and re-entry-guarded against);
+// ``savingTarget`` is the element whose editing/saving classes toggle and which is passed back to
+// ``onEdgeTitleChange`` as ``label`` (the save flow only toggles a class on it).
+const openMaxGraphEdgeTitleEditor = ({
+  diagram,
+  edgeId,
+  originalTitle,
+  box,
+  container,
+  savingTarget,
+  onEdgeTitleChange
+}) => {
+  if (container.querySelector('.maxgraph-edge-title-editor-foreign')) return;
+
+  const foreignObject = createSvgElement('foreignObject', {
+    class: 'maxgraph-edge-title-editor-foreign',
+    x: box.x,
+    y: box.y,
+    width: box.width,
+    height: box.height
+  });
+  const editor = document.createElement('textarea');
+  editor.className = 'maxgraph-edge-title-editor';
+  editor.rows = 3;
+  editor.value = originalTitle;
+  editor.setAttribute('aria-label', 'Edit maxGraph edge title');
+
+  let saveStarted = false;
+  const closeEditor = () => {
+    foreignObject.remove();
+    savingTarget.classList.remove('maxgraph-edge-title-editing');
+  };
+  const saveTitle = async () => {
+    if (saveStarted) return;
+    saveStarted = true;
+    editor.removeEventListener('blur', saveTitle);
+    if (editor.value === originalTitle) {
+      closeEditor();
+      return;
+    }
+
+    editor.disabled = true;
+    try {
+      await onEdgeTitleChange({
+        diagram,
+        label: savingTarget,
+        edgeId,
+        previousTitle: originalTitle,
+        title: editor.value
+      });
+      // Close on success directly: defensively remove the editor on a successful save even
+      // when the reload renders identical HTML and does not re-render the canvas (which would
+      // otherwise leave the box open). On a real content change the elements are already
+      // detached, so this is a harmless no-op.
+      closeEditor();
+    } catch {
+      saveStarted = false;
+      editor.disabled = false;
+      editor.addEventListener('blur', saveTitle, { once: true });
+      editor.focus();
+    }
+  };
+
+  savingTarget.classList.add('maxgraph-edge-title-editing');
+  foreignObject.appendChild(editor);
+  container.appendChild(foreignObject);
+  editor.addEventListener('blur', saveTitle, { once: true });
+  editor.addEventListener('keydown', (event) => {
+    // Escape commits the edit (same as blur); consumed so it does not reach the canvas
+    // Escape handlers (selection clear / pick-mode cancel).
+    if (event.key !== 'Escape') return;
+    event.preventDefault();
+    event.stopPropagation();
+    saveTitle();
+  });
+  window.setTimeout(() => {
+    editor.focus();
+    editor.select();
+  }, 0);
+};
+
+// Open the title editor over an existing edge label (box and current title from its dataset).
+const openMaxGraphEdgeLabelEditor = (diagram, label, onEdgeTitleChange) => {
+  openMaxGraphEdgeTitleEditor({
+    diagram,
+    edgeId: label.dataset.maxgraphEdgeId,
+    originalTitle: label.dataset.maxgraphTitle || '',
+    box: {
+      x: readMaxGraphNumber(label.dataset.maxgraphLabelX),
+      y: readMaxGraphNumber(label.dataset.maxgraphLabelY),
+      // Floor the editor to a minimum editing area of 150 x 50 so a short edge label still
+      // opens a usable editor.
+      width: Math.max(readMaxGraphNumber(label.dataset.maxgraphLabelWidth), 150),
+      height: Math.max(readMaxGraphNumber(label.dataset.maxgraphLabelHeight), 50)
+    },
+    container: label,
+    savingTarget: label,
+    onEdgeTitleChange
+  });
+};
+
 const bindMaxGraphEdgeTitleEdit = (svg, diagram, onEdgeTitleChange) => {
   if (!onEdgeTitleChange) return;
 
@@ -54,73 +156,57 @@ const bindMaxGraphEdgeTitleEdit = (svg, diagram, onEdgeTitleChange) => {
     label.addEventListener('dblclick', (event) => {
       event.preventDefault();
       event.stopPropagation();
-      if (label.querySelector('.maxgraph-edge-title-editor-foreign')) return;
+      openMaxGraphEdgeLabelEditor(diagram, label, onEdgeTitleChange);
+    });
+  });
 
-      const originalTitle = label.dataset.maxgraphTitle || '';
-      const x = readMaxGraphNumber(label.dataset.maxgraphLabelX);
-      const y = readMaxGraphNumber(label.dataset.maxgraphLabelY);
-      const width = Math.max(readMaxGraphNumber(label.dataset.maxgraphLabelWidth), 96);
-      const height = Math.max(readMaxGraphNumber(label.dataset.maxgraphLabelHeight), 48);
-      const foreignObject = createSvgElement('foreignObject', {
-        class: 'maxgraph-edge-title-editor-foreign',
-        x,
-        y,
-        width,
-        height
-      });
-      const editor = document.createElement('textarea');
-      editor.className = 'maxgraph-edge-title-editor';
-      editor.rows = 3;
-      editor.value = originalTitle;
-      editor.setAttribute('aria-label', 'Edit maxGraph edge title');
+  // Double-clicking the connector line (or its wider transparent hit band) opens the same editor,
+  // so an untitled edge — which renders no label to double-click — can still be titled.
+  bindMaxGraphEdgeLineTitleEdit(svg, diagram, onEdgeTitleChange);
+};
 
-      let saveStarted = false;
-      const closeEditor = () => {
-        foreignObject.remove();
-        label.classList.remove('maxgraph-edge-title-editing');
-      };
-      const saveTitle = async () => {
-        if (saveStarted) return;
-        saveStarted = true;
-        editor.removeEventListener('blur', saveTitle);
-        if (editor.value === originalTitle) {
-          closeEditor();
+const bindMaxGraphEdgeLineTitleEdit = (svg, diagram, onEdgeTitleChange) => {
+  svg.querySelectorAll('.maxgraph-edge-hit[data-maxgraph-edge-id], .maxgraph-edge[data-maxgraph-edge-id]')
+    .forEach((line) => {
+      line.addEventListener('dblclick', (event) => {
+        // Delete and add-edge modes claim a click for their own pick, so leave the edge alone there.
+        if (
+          diagram.classList.contains('maxgraph-deleting')
+          || diagram.classList.contains('maxgraph-adding-edge')
+        ) return;
+        event.preventDefault();
+        event.stopPropagation();
+
+        const edgeId = line.dataset.maxgraphEdgeId;
+        const label = Array.from(svg.querySelectorAll('.maxgraph-edge-label[data-maxgraph-edge-id]'))
+          .find((candidate) => candidate.dataset.maxgraphEdgeId === edgeId) || null;
+        if (label) {
+          // A titled edge reuses its existing label box, matching a double-click on the label.
+          openMaxGraphEdgeLabelEditor(diagram, label, onEdgeTitleChange);
           return;
         }
 
-        editor.disabled = true;
-        try {
-          await onEdgeTitleChange({
-            diagram,
-            label,
-            edgeId: label.dataset.maxgraphEdgeId,
-            previousTitle: originalTitle,
-            title: editor.value
-          });
-          // Close on success directly: a save whose persisted value matches the rendered value
-          // (e.g. clearing an already-"_" title, which the server normalizes back to "_") yields
-          // an identical reload that does not re-render the canvas, so the editor box would
-          // otherwise stay open. On a real content change the elements are already detached, so
-          // this is a harmless no-op.
-          closeEditor();
-        } catch {
-          saveStarted = false;
-          editor.disabled = false;
-          editor.addEventListener('blur', saveTitle, { once: true });
-          editor.focus();
-        }
-      };
-
-      label.classList.add('maxgraph-edge-title-editing');
-      foreignObject.appendChild(editor);
-      label.appendChild(foreignObject);
-      editor.addEventListener('blur', saveTitle, { once: true });
-      window.setTimeout(() => {
-        editor.focus();
-        editor.select();
-      }, 0);
+        // An untitled edge has no label element, so anchor a blank editor at the double-click point.
+        const point = getMaxGraphSvgPointerPoint(svg, event);
+        // Default to the 150 x 50 minimum so the blank editor stays centred on the click point.
+        const editorWidth = 150;
+        const editorHeight = 50;
+        openMaxGraphEdgeTitleEditor({
+          diagram,
+          edgeId,
+          originalTitle: '',
+          box: {
+            x: point.x - editorWidth / 2,
+            y: point.y - editorHeight / 2,
+            width: editorWidth,
+            height: editorHeight
+          },
+          container: svg,
+          savingTarget: line,
+          onEdgeTitleChange
+        });
+      });
     });
-  });
 };
 
 const bindMaxGraphNodeTitleEdit = (svg, diagram, onNodeTitleChange) => {
@@ -142,8 +228,10 @@ const bindMaxGraphNodeTitleEdit = (svg, diagram, onNodeTitleChange) => {
         class: 'maxgraph-node-title-editor-foreign',
         x: x + editorInset,
         y: y + editorInset,
-        width: Math.max(width - (editorInset * 2), 24),
-        height: Math.max(height - (editorInset * 2), 24)
+        // Floor the editor to a minimum editing area of 150 x 50 so a small entity box still
+        // opens a usable editor.
+        width: Math.max(width - (editorInset * 2), 150),
+        height: Math.max(height - (editorInset * 2), 50)
       });
       const editor = document.createElement('textarea');
       editor.className = 'maxgraph-node-title-editor';
@@ -191,6 +279,14 @@ const bindMaxGraphNodeTitleEdit = (svg, diagram, onNodeTitleChange) => {
       foreignObject.appendChild(editor);
       node.appendChild(foreignObject);
       editor.addEventListener('blur', saveTitle, { once: true });
+      editor.addEventListener('keydown', (event) => {
+        // Escape commits the edit (same as blur); consumed so it does not reach the canvas
+        // Escape handlers (selection clear / pick-mode cancel).
+        if (event.key !== 'Escape') return;
+        event.preventDefault();
+        event.stopPropagation();
+        saveTitle();
+      });
       window.setTimeout(() => {
         editor.focus();
         editor.select();
@@ -361,7 +457,7 @@ const bindMaxGraphCanvasZoomPan = (diagram, diagramIndex) => {
     shouldStartPan: (event) => !(
       event.target.closest
       && event.target.closest(
-        '.maxgraph-add-controls, .maxgraph-node, .maxgraph-node-title-editor, .maxgraph-edge-label, .maxgraph-edge-title-editor'
+        '.maxgraph-add-controls, .maxgraph-node, .maxgraph-node-title-editor, .maxgraph-edge-label, .maxgraph-edge-title-editor, .maxgraph-edge, .maxgraph-edge-hit'
       )
     )
   });

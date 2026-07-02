@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.1.5
+
+- Add current path to file/folder dropdown list
+- Add path to new changed file dropdown and hover text
+- Add notification popup when new file changes found by server
+- Add last view timestamp in viewed file log, to detect file changes after last view.
+- Add batch deleting in mermaid. Adjust cursor style when multiple selection. Adjust node border style when selected.
+- Add group selection and add node and edge in mermaid
+- Change the minimal size of title editing area to 150w x 50h
+- Fix the mermaid edge title edit area shift issue
+- Enable mermaid edge double click to enter title edit mode
+- Press esc key to quit edit title mode and save title
+- Make the mermaid edge hover area wider
+- Make mermaid edge double clickable to edit title
+- Change link/edge cursor to default. Don't convert empty title to "_", keep it empty.
+- Add feature to double click edge to edit the edge title
+- Fix the issue that SKILL.md doesn't have md-activator icon on top right
+- Add screenshot of 0.1.4
+- Allow fix for "." in edge in mermaid
+
 ## 0.1.4
 
 - Update tab title when changing current viewing file

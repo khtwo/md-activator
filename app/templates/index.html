@@ -51,6 +51,9 @@
               @update:model-value="onFileSelected"
               @popup-show="refreshFileOptions"
             >
+              <template v-slot:before-options>
+                <div class="viewer-file-current-path">{{ currentFolderLabel }}</div>
+              </template>
               <template v-slot:option="scope">
                 <q-item
                   v-bind="scope.itemProps"
@@ -139,12 +142,16 @@
                       v-close-popup
                       class="viewer-new-file-item"
                       :class="{ 'viewer-new-file-unviewed': !item.viewed }"
+                      :title="item.path"
                       @click="openNewFile(item)"
                     >
                       <q-item-section>
                         <div class="viewer-new-file-name-row">
                           <span class="viewer-clarification-dot" aria-hidden="true" v-if="item.needsReview"></span>
-                          <div class="viewer-new-file-name">{{ item.name }}</div>
+                          <div class="viewer-new-file-name">{{ item.name }}<span
+                            class="viewer-new-file-path"
+                            v-if="newFileDir(item.path)"
+                          >{{ ' (' + newFileDir(item.path) + '/)' }}</span></div>
                         </div>
                         <div class="viewer-new-file-date">{{ item.created }}</div>
                       </q-item-section>
@@ -270,6 +277,8 @@
   <script src="/static/max-graph.js?v={{ static_asset_version }}"></script>
   <script src="/static/mermaid-zoom-pan.js?v={{ static_asset_version }}"></script>
   <script src="/static/mermaid-title-edit.js?v={{ static_asset_version }}"></script>
+  <script src="/static/mermaid-selection.js?v={{ static_asset_version }}"></script>
+  <script src="/static/mermaid-add.js?v={{ static_asset_version }}"></script>
   <script src="/static/app-support.js?v={{ static_asset_version }}"></script>
   <script src="/static/mermaid-repair.js?v={{ static_asset_version }}"></script>
   <script src="/static/search.js?v={{ static_asset_version }}"></script>

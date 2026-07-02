@@ -53,7 +53,12 @@ from .models import (
     MaxGraphNodesDeleteResult,
     MaxGraphNodesPositionUpdateResult,
     MaxGraphNodeTitleUpdateResult,
+    MermaidBlockRestoreResult,
+    MermaidEdgeAddResult,
+    MermaidEdgeDeleteResult,
     MermaidEdgeTitleUpdateResult,
+    MermaidNodeAddResult,
+    MermaidNodesDeleteResult,
     MermaidNodeTitleUpdateResult,
     MermaidRepairWritebackResult,
 )
@@ -486,6 +491,43 @@ class MarkdownRenderer:
         return self._writeback_service.update_mermaid_edge_title(
             path, line, index, diagram_type, source, target, occurrence, edge_index, title
         )
+
+    def add_mermaid_node(
+        self, path: str, line: int, index: int, diagram_type: str
+    ) -> MermaidNodeAddResult:
+        return self._writeback_service.add_mermaid_node(path, line, index, diagram_type)
+
+    def add_mermaid_edge(
+        self, path: str, line: int, index: int, diagram_type: str, source_id: str, target_id: str
+    ) -> MermaidEdgeAddResult:
+        return self._writeback_service.add_mermaid_edge(
+            path, line, index, diagram_type, source_id, target_id
+        )
+
+    def delete_mermaid_nodes(
+        self, path: str, line: int, index: int, diagram_type: str, node_ids: list[str]
+    ) -> MermaidNodesDeleteResult:
+        return self._writeback_service.delete_mermaid_nodes(path, line, index, diagram_type, node_ids)
+
+    def delete_mermaid_edge(
+        self,
+        path: str,
+        line: int,
+        index: int,
+        diagram_type: str,
+        source: str,
+        target: str,
+        occurrence: int,
+        edge_index: int,
+    ) -> MermaidEdgeDeleteResult:
+        return self._writeback_service.delete_mermaid_edge(
+            path, line, index, diagram_type, source, target, occurrence, edge_index
+        )
+
+    def restore_mermaid_block(
+        self, path: str, line: int, index: int, source: str
+    ) -> MermaidBlockRestoreResult:
+        return self._writeback_service.restore_mermaid_block(path, line, index, source)
 
     def repair_mermaid_block(self, path: str, line: int, index: int) -> MermaidRepairWritebackResult:
         return self._writeback_service.repair_mermaid_block(path, line, index)

@@ -28,6 +28,16 @@
   cursor: pointer;
 }
 
+/* A wide transparent hit band laid over each thin edge connector path (mirroring
+   .maxgraph-edge-hit) so the edge is easy to double-click without thickening the visible stroke. */
+.markdown-body .mermaid-edge-hit {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 14;
+  pointer-events: stroke;
+  cursor: pointer;
+}
+
 .markdown-body .mermaid-edge-title-editing {
   cursor: text;
 }
@@ -71,6 +81,131 @@ body.body--dark .markdown-body .mermaid-edge-title-editor {
 /* Inline diagram error / auto-repair notice shown in place of a broken mermaid block. */
 .markdown-body .mermaid-unrendered {
   display: none;
+}
+
+/* Node multi-selection (mirrors the maxGraph selection affordance). While a selection modifier
+   (Shift marquee or Ctrl/Cmd toggle) is held the canvas shows a crosshair across the whole canvas.
+   The crosshair is set on the inner `.mermaid-viewport` (the element that owns `cursor: grab`), not
+   only on the outer `.mermaid`: cursor is inherited, so the viewport's own `grab` would override a
+   crosshair inherited from `.mermaid` and leave the background grab. maxGraph avoids this because
+   its diagram container is itself the grab surface, so its two-class marquee selector wins on the
+   same element. Targeting the viewport here reproduces that whole-canvas crosshair. */
+.markdown-body .mermaid.mermaid-marquee-ready .mermaid-viewport,
+.markdown-body .mermaid.mermaid-marquee-ready g.node {
+  cursor: crosshair;
+}
+
+/* The rubber-band selection rectangle drawn during a Shift-drag. Inert to the pointer so it never
+   intercepts the drag it is visualizing. */
+.markdown-body .mermaid-selection-box {
+  fill: rgba(37, 99, 235, 0.12);
+  stroke: #2563eb;
+  stroke-width: 1;
+  stroke-dasharray: 4 3;
+  pointer-events: none;
+}
+
+/* A node that is part of the current multi-selection. Mermaid owns the node shape markup, so the
+   highlight uses a shape-agnostic glow plus a stroke emphasis on the node's shape primitives. */
+.markdown-body .mermaid g.node.mermaid-node-selected {
+  filter: drop-shadow(0 0 3px #2563eb);
+}
+
+.markdown-body .mermaid g.node.mermaid-node-selected > :where(rect, circle, ellipse, polygon, path) {
+  stroke: #2563eb !important;
+  stroke-width: 2.5px !important;
+}
+
+/* Dark theme: match `.maxgraph-node-selected`, whose selected-node border switches to #60a5fa in
+   dark mode (the light value #2563eb stays for both above). The stroke-width carries over from the
+   light rule; only the colour is re-stated here. The glow follows the same hue for coherence. */
+body.body--dark .markdown-body .mermaid g.node.mermaid-node-selected {
+  filter: drop-shadow(0 0 3px #60a5fa);
+}
+
+body.body--dark .markdown-body .mermaid g.node.mermaid-node-selected > :where(rect, circle, ellipse, polygon, path) {
+  stroke: #60a5fa !important;
+}
+
+/* Per-diagram Add controls (add node / add edge), mirroring the maxGraph Add controls. The toolbar
+   anchors to the diagram container, so it must establish a positioning context. */
+.markdown-body .mermaid {
+  position: relative;
+}
+
+.markdown-body .mermaid-add-controls {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 6;
+  display: flex;
+  gap: 4px;
+  align-items: flex-start;
+  cursor: default;
+}
+
+.markdown-body .mermaid-add-button,
+.markdown-body .mermaid-add-edge-button,
+.markdown-body .mermaid-delete-button {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  color: #334155;
+  cursor: pointer;
+  display: flex;
+  font-size: 18px;
+  font-weight: 700;
+  height: 28px;
+  justify-content: center;
+  line-height: 1;
+  padding: 0;
+  width: 28px;
+}
+
+.markdown-body .mermaid-delete-button {
+  font-size: 14px;
+}
+
+.markdown-body .mermaid-add-button:hover,
+.markdown-body .mermaid-add-edge-button:hover,
+.markdown-body .mermaid-delete-button:hover {
+  background: #eef2f7;
+}
+
+body.body--dark .markdown-body .mermaid-add-button,
+body.body--dark .markdown-body .mermaid-add-edge-button,
+body.body--dark .markdown-body .mermaid-delete-button {
+  background: #1f2733;
+  border-color: #3a4452;
+  color: #e8edf4;
+}
+
+body.body--dark .markdown-body .mermaid-add-button:hover,
+body.body--dark .markdown-body .mermaid-add-edge-button:hover,
+body.body--dark .markdown-body .mermaid-delete-button:hover {
+  background: #2a3340;
+}
+
+/* Edge-pick mode: a click picks an endpoint (crosshair), and the chosen source node is highlighted
+   in amber until the target is picked. Delete-pick mode shares the crosshair. As with the selection
+   marquee above, the crosshair is set on the inner `.mermaid-viewport` so it covers the whole canvas
+   background (the viewport's own `cursor: grab` would otherwise win there). */
+.markdown-body .mermaid.mermaid-adding-edge .mermaid-viewport,
+.markdown-body .mermaid.mermaid-adding-edge g.node,
+.markdown-body .mermaid.mermaid-deleting .mermaid-viewport,
+.markdown-body .mermaid.mermaid-deleting g.node,
+.markdown-body .mermaid.mermaid-deleting .mermaid-edge-editable {
+  cursor: crosshair;
+}
+
+.markdown-body .mermaid g.node.mermaid-node-edge-source {
+  filter: drop-shadow(0 0 3px #f59e0b);
+}
+
+.markdown-body .mermaid g.node.mermaid-node-edge-source > :where(rect, circle, ellipse, polygon, path) {
+  stroke: #f59e0b !important;
+  stroke-width: 2.5px !important;
 }
 
 .markdown-body .mermaid-repair-box {

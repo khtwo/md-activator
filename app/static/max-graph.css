@@ -80,14 +80,17 @@ body.body--dark .markdown-body .maxgraph-node.maxgraph-node-selected .maxgraph-n
   cursor: crosshair;
 }
 
-/* A wide transparent hit target laid over each edge. It is inert in normal use; only in delete
-   mode does its stroke become a pointer target, so the thin connector line is easy to click
-   without widening the visible stroke (whose arrow markers scale with stroke-width). */
+/* A wide transparent hit target laid over each edge, so the thin connector line is easy to click
+   without widening the visible stroke (whose arrow markers scale with stroke-width). Its stroke is
+   a pointer target in normal use — double-clicking it opens the edge-title editor — and it shows a
+   pointer cursor on hover (matching the mermaid edge hit band) to signal the edit affordance;
+   delete mode swaps the cursor to the crosshair for delete picking. */
 .markdown-body .maxgraph-edge-hit {
   fill: none;
   stroke: transparent;
   stroke-width: 14;
-  pointer-events: none;
+  pointer-events: stroke;
+  cursor: pointer;
 }
 
 .markdown-body .maxgraph-diagram.maxgraph-deleting .maxgraph-edge-hit {

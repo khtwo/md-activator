@@ -182,7 +182,7 @@ Errors: same `400`/`403`/`404` model as `POST /api/maxgraph-node`.
 
 Endpoint: `POST /api/maxgraph-edge-title`
 
-Persists an inline maxGraph edge-title edit. An empty (`""`) title is normalized to `_` before it is written (the response uses the normalized value).
+Persists an inline maxGraph edge-title edit. An empty (`""`) title is written as an empty `value` (`value=""`); it is not normalized to a placeholder (an untitled edge stays re-editable by double-clicking its connector line). The response returns the saved title verbatim.
 
 Request body: `{ "path": "diagram.md", "line": 10, "index": 0, "edgeId": "e1", "title": "New label" }`
 
@@ -262,13 +262,63 @@ Errors: same `400`/`403`/`404` model as `POST /api/maxgraph-node` (the `400` als
 
 Endpoint: `POST /api/mermaid-edge-title`
 
-Persists an inline Mermaid edge-label edit. The edge is located per diagram type: by relationship/transition ordinal (`edgeIndex`) for erDiagram/classDiagram/stateDiagram, or by `source`/`target`/`occurrence` for flowchart. Omitted locators default to empty strings and `0`. `diagramType` must be one of `flowchart`, `er`, `class`, or `state` (the same short forms used by `POST /api/mermaid-node-title`); `title` must be non-empty.
+Persists an inline Mermaid edge-label edit. The edge is located per diagram type: by relationship/transition ordinal (`edgeIndex`) for erDiagram/classDiagram/stateDiagram, or by `source`/`target`/`occurrence` for flowchart. Omitted locators default to empty strings and `0`. `diagramType` must be one of `flowchart`, `er`, `class`, or `state` (the same short forms used by `POST /api/mermaid-node-title`). An empty (`""`) `title` clears the edge's label (the flowchart link drops back to a bare arrow; erDiagram/classDiagram/stateDiagram drop the `: label`), leaving the edge present and re-editable by double-clicking its connector line; a non-empty title is written verbatim.
 
 Request body: `{ "path": "diagram.md", "line": 10, "index": 0, "diagramType": "flowchart", "source": "A", "target": "B", "occurrence": 0, "edgeIndex": 0, "title": "New label" }`
 
 Successful response: echoes `path`, `line`, `index`, `diagramType`, `source`, `target`, `occurrence`, `edgeIndex`, and `title`.
 
-Errors: same `400`/`403`/`404` model as `POST /api/maxgraph-node` (the `400` also covers an unsupported `diagramType` or an empty `title`).
+Errors: same `400`/`403`/`404` model as `POST /api/maxgraph-node` (the `400` also covers an unsupported `diagramType`; an empty `title` is no longer an error — it clears the label).
+
+Endpoint: `POST /api/mermaid-node-add`
+
+Appends a new isolated node titled "New" to a Mermaid block and re-renders. The node id is **server-generated** and unique within the block (smallest unused `New_<n>`), because the client only sees rendered node ids (which can miss an id present in source but not rendered). Per-type synthesis: `<id>["New"]` for flowchart/erDiagram, `class <id>["New"]` for classDiagram, and a `<id> : New` description line for stateDiagram.
+
+Request body: `{ "path": "diagram.md", "line": 10, "index": 0, "diagramType": "flowchart" }`. `diagramType` must be one of `flowchart`, `er`, `class`, or `state`.
+
+Successful response: `{ "path", "line", "index", "diagramType", "nodeId": "New_1", "previousSource": "<block source before>", "source": "<block source after>" }`. The two source snapshots drive block-snapshot undo/redo (see `mermaid-block-restore`).
+
+Errors: same `400`/`403`/`404` model as `POST /api/maxgraph-node` (the `400` also covers an unsupported `diagramType`).
+
+Endpoint: `POST /api/mermaid-edge-add`
+
+Appends a new edge between two existing nodes and re-renders. Per-type synthesis: a bare `<src> --> <tgt>` connector for flowchart/classDiagram/stateDiagram, or a `<src> }o--o{ <tgt> : ""` relationship (default zero-or-many cardinality, empty editable label) for erDiagram, since erDiagram syntactically requires a cardinality and a label token.
+
+Request body: `{ "path": "diagram.md", "line": 10, "index": 0, "diagramType": "flowchart", "sourceId": "A", "targetId": "B" }`. `diagramType` as above; `sourceId`/`targetId` must be non-empty and distinct (a self-loop is rejected).
+
+Successful response: echoes `path`, `line`, `index`, `diagramType`, `sourceId`, `targetId`, plus `previousSource` and `source` snapshots.
+
+Errors: same `400`/`403`/`404` model as `POST /api/maxgraph-node` (the `400` also covers an unsupported `diagramType`, an empty endpoint, or a self-loop).
+
+Endpoint: `POST /api/mermaid-block-restore`
+
+Replaces a Mermaid block's entire content with a caller-supplied source snapshot. Used to undo/redo a mermaid add **or delete**: the browser captures the block's before/after source from the add/delete response and writes the appropriate one back here on Ctrl+Z (before-source) / Ctrl+Y (after-source). Because mermaid edges have no stable id, this snapshot restore — not a delete-by-id — is how mermaid structural edits are reversed.
+
+Request body: `{ "path": "diagram.md", "line": 10, "index": 0, "source": "<block source>" }`. `source` must be non-blank.
+
+Successful response: `{ "path": "diagram.md", "line": 10, "index": 0 }`
+
+Errors: same `400`/`403`/`404` model as `POST /api/maxgraph-node` (the `400` also covers a blank `source`).
+
+Endpoint: `POST /api/mermaid-nodes-delete`
+
+Deletes one or more nodes from a Mermaid block and **cascades** the removal of their incident edges, in one write. A node id removes every content source line that names it as a whole token outside label/quoted regions (its declaration, `style`/`class` lines, and edge lines), and an entity/class/composite-state line that opens a `{ … }` body is removed through its matching `}`. The diagram-type declaration line is never removed. (Limitations, recoverable via undo: a line naming multiple nodes — an `A --> B --> C` chain or `A & B --> C` — is removed wholesale, and a node existing only as an edge endpoint disappears with that edge.) Used by the Delete button when one or more nodes are selected (single delete = select one node).
+
+Request body: `{ "path": "diagram.md", "line": 10, "index": 0, "diagramType": "flowchart", "nodeIds": ["A", "B"] }`. `diagramType` must be one of `flowchart`, `er`, `class`, or `state`; `nodeIds` must be non-empty.
+
+Successful response: `{ …, "nodeIds": ["A", "B"], "previousSource": "<before>", "source": "<after>" }`.
+
+Errors: same `400`/`403`/`404` model as `POST /api/maxgraph-node` (the `400` also covers an unsupported `diagramType` or empty `nodeIds`).
+
+Endpoint: `POST /api/mermaid-edge-delete`
+
+Deletes a single edge, located by the **same per-type identity the edge-title editor uses**: flowchart by `(source, target, occurrence)`, er/class/state by relationship/transition ordinal (`edgeIndex`). Its source line is removed. The complex links the edge-title editor refuses (flowchart `&` / chains / unparseable operators, state self-loops) are likewise non-deletable (`400`). Used by the Delete button when no node is selected (delete-pick mode).
+
+Request body: `{ "path": "diagram.md", "line": 10, "index": 0, "diagramType": "flowchart", "source": "A", "target": "B", "occurrence": 0, "edgeIndex": 0 }`.
+
+Successful response: `{ "path", "line", "index", "previousSource": "<before>", "source": "<after>" }`.
+
+Errors: same `400`/`403`/`404` model as `POST /api/maxgraph-node` (the `400` also covers an unsupported `diagramType` or an edge that cannot be located).
 
 Endpoint: `POST /api/mermaid-diagnose`
 

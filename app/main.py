@@ -26,7 +26,7 @@ from .new_files import (
     contains_unchecked_confirm,
     resolve_span_days,
 )
-from .notify import schedule_announcement
+from .notify import schedule_announcement, schedule_change_notification
 
 APP_ROOT = Path(__file__).resolve().parents[1]
 
@@ -71,6 +71,8 @@ LOCAL_STATIC_FILES = (
     "max-graph.js",
     "mermaid-zoom-pan.js",
     "mermaid-title-edit.js",
+    "mermaid-selection.js",
+    "mermaid-add.js",
     "app-support.js",
     "mermaid-repair.js",
     "search.js",
@@ -95,6 +97,9 @@ new_files_service = NewFilesService(
     CONTENT_ROOT,
     span_days=resolve_span_days(),
     priority_filter=contains_unchecked_confirm,
+    # Raise a native desktop notification (offloaded to a daemon thread so a toast never blocks
+    # the poll) when the detector finds .md files created/changed after the session baseline.
+    notifier=schedule_change_notification,
 )
 
 # Active only in single-file (``--open``) mode; see app/auto_shutdown.py. The HTTP
@@ -392,6 +397,48 @@ class MermaidEdgeTitleUpdateRequest(BaseModel):
     occurrence: int = 0
     edge_index: int = Field(default=0, alias="edgeIndex")
     title: str
+
+
+class MermaidNodeAddRequest(BaseModel):
+    path: str
+    line: int
+    index: int
+    diagram_type: str = Field(alias="diagramType")
+
+
+class MermaidEdgeAddRequest(BaseModel):
+    path: str
+    line: int
+    index: int
+    diagram_type: str = Field(alias="diagramType")
+    source_id: str = Field(alias="sourceId")
+    target_id: str = Field(alias="targetId")
+
+
+class MermaidNodesDeleteRequest(BaseModel):
+    path: str
+    line: int
+    index: int
+    diagram_type: str = Field(alias="diagramType")
+    node_ids: list[str] = Field(alias="nodeIds")
+
+
+class MermaidEdgeDeleteRequest(BaseModel):
+    path: str
+    line: int
+    index: int
+    diagram_type: str = Field(alias="diagramType")
+    source: str = ""
+    target: str = ""
+    occurrence: int = 0
+    edge_index: int = Field(default=0, alias="edgeIndex")
+
+
+class MermaidBlockRestoreRequest(BaseModel):
+    path: str
+    line: int
+    index: int
+    source: str
 
 
 class MermaidDiagnoseRequest(BaseModel):
@@ -870,6 +917,138 @@ def update_mermaid_edge_title(payload: MermaidEdgeTitleUpdateRequest) -> dict:
             "occurrence": result.occurrence,
             "edgeIndex": result.edge_index,
             "title": result.title,
+        }
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=SAVE_PERMISSION_ERROR_DETAIL) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/mermaid-node-add")
+def add_mermaid_node(payload: MermaidNodeAddRequest) -> dict:
+    try:
+        result = renderer.add_mermaid_node(
+            path=payload.path,
+            line=payload.line,
+            index=payload.index,
+            diagram_type=payload.diagram_type,
+        )
+        return {
+            "path": result.relative_path,
+            "line": result.line,
+            "index": result.index,
+            "diagramType": result.diagram_type,
+            "nodeId": result.node_id,
+            "previousSource": result.previous_source,
+            "source": result.source,
+        }
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=SAVE_PERMISSION_ERROR_DETAIL) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/mermaid-edge-add")
+def add_mermaid_edge(payload: MermaidEdgeAddRequest) -> dict:
+    try:
+        result = renderer.add_mermaid_edge(
+            path=payload.path,
+            line=payload.line,
+            index=payload.index,
+            diagram_type=payload.diagram_type,
+            source_id=payload.source_id,
+            target_id=payload.target_id,
+        )
+        return {
+            "path": result.relative_path,
+            "line": result.line,
+            "index": result.index,
+            "diagramType": result.diagram_type,
+            "sourceId": result.source_id,
+            "targetId": result.target_id,
+            "previousSource": result.previous_source,
+            "source": result.source,
+        }
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=SAVE_PERMISSION_ERROR_DETAIL) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/mermaid-nodes-delete")
+def delete_mermaid_nodes(payload: MermaidNodesDeleteRequest) -> dict:
+    try:
+        result = renderer.delete_mermaid_nodes(
+            path=payload.path,
+            line=payload.line,
+            index=payload.index,
+            diagram_type=payload.diagram_type,
+            node_ids=payload.node_ids,
+        )
+        return {
+            "path": result.relative_path,
+            "line": result.line,
+            "index": result.index,
+            "diagramType": result.diagram_type,
+            "nodeIds": result.node_ids,
+            "previousSource": result.previous_source,
+            "source": result.source,
+        }
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=SAVE_PERMISSION_ERROR_DETAIL) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/mermaid-edge-delete")
+def delete_mermaid_edge(payload: MermaidEdgeDeleteRequest) -> dict:
+    try:
+        result = renderer.delete_mermaid_edge(
+            path=payload.path,
+            line=payload.line,
+            index=payload.index,
+            diagram_type=payload.diagram_type,
+            source=payload.source,
+            target=payload.target,
+            occurrence=payload.occurrence,
+            edge_index=payload.edge_index,
+        )
+        return {
+            "path": result.relative_path,
+            "line": result.line,
+            "index": result.index,
+            "previousSource": result.previous_source,
+            "source": result.source,
+        }
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=SAVE_PERMISSION_ERROR_DETAIL) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/mermaid-block-restore")
+def restore_mermaid_block(payload: MermaidBlockRestoreRequest) -> dict:
+    try:
+        result = renderer.restore_mermaid_block(
+            path=payload.path,
+            line=payload.line,
+            index=payload.index,
+            source=payload.source,
+        )
+        return {
+            "path": result.relative_path,
+            "line": result.line,
+            "index": result.index,
         }
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
