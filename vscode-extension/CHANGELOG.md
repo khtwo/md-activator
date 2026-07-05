@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.6
+
+- Set [x] Confirmed for demo md file
+
 ## 0.1.5
 
 - Add current path to file/folder dropdown list

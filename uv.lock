@@ -231,8 +231,8 @@ wheels = [
 
 [[package]]
 name = "md-activator"
-version = "0.1.5"
-source = { virtual = "." }
+version = "0.1.6"
+source = { editable = "." }
 dependencies = [
     { name = "fastapi" },
     { name = "httpx" },

@@ -1,7 +1,8 @@
 [project]
 name = "md-activator"
-version = "0.1.5"
+version = "0.1.6"
 description = "MD Activator"
+readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
   "fastapi>=0.115.0",
@@ -11,6 +12,15 @@ dependencies = [
   "httpx>=0.27.0",
   "win11toast>=0.32 ; sys_platform == 'win32'",
 ]
+
+# Console command installed by `uv tool install git+https://github.com/khtwo/md-activator`.
+# Same entry point as `python -m app.main`.
+[project.scripts]
+md-activator = "app.main:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [dependency-groups]
 dev = [
@@ -23,4 +33,28 @@ pythonpath = ["."]
 testpaths = ["tests"]
 
 [tool.uv]
-package = false
+package = true
+
+# Wheel: ship the `app` package plus the vendored `to-html/` editor assets. `to-html/` is
+# force-included at the wheel root so the runtime's APP_ROOT = Path(__file__).parents[1]
+# resolves it identically in the installed layout (<site-packages>/to-html) and the source tree.
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+exclude = [
+  "**/__pycache__",
+  "**/*.pyc",
+  "app/graphify-out",
+]
+
+[tool.hatch.build.targets.wheel.force-include]
+"to-html" = "to-html"
+
+[tool.hatch.build.targets.sdist]
+include = [
+  "app",
+  "to-html",
+  "pyproject.toml",
+  "README.md",
+  "LICENSE",
+  "THIRD_PARTY_NOTICES.txt",
+]

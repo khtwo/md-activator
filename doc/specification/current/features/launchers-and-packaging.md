@@ -23,6 +23,33 @@ The runtime app runs on Windows, macOS, and Linux:
 `start_md.sh`:
 - Provides the same content-root, dependency preparation, `uv`-availability check, and argument forwarding behavior for POSIX shells.
 
+## Installable Distribution (`uv tool install`)
+The project is a buildable Python package, so the local web server can be installed as a standalone
+command:
+- `uv tool install git+https://github.com/khtwo/md-activator` (or `uv tool install <path>` against a
+  release payload) builds a wheel and installs an `md-activator` console command into its own
+  isolated tool environment.
+- The console entry point is `md-activator = "app.main:main"` — the same `main()` that
+  `python -m app.main` runs — so `md-activator [--cd FOLDER] [--open FILE] [--host …] [--port …] …`
+  accepts the full server CLI (see [server-api.md](server-api.md)). With no `--cd`/`--open`, the
+  content root defaults to the current working directory, so `md-activator` run inside a folder
+  serves that folder.
+- The wheel bundles every runtime asset needed to serve the editor: the `app/` package (including
+  `app/static/**` and `app/templates/index.html`) plus the vendored `to-html/**` (mermaid, prismjs,
+  quasar, vue). `to-html/` is force-included at the wheel root so the runtime's
+  `APP_ROOT = Path(__file__).resolve().parents[1]` resolves it identically in the installed layout
+  and in the source/release layout — no runtime code path differs between the two.
+- The wheel excludes non-runtime artifacts: `__pycache__/`, `*.pyc`, the `app/graphify-out/`
+  graphify dev cache, and the documentation-only `img/` tree (unused by the running server).
+- Build backend: `hatchling`. Dependencies are the same `[project.dependencies]` the launchers use;
+  the Windows-only `win11toast` stays gated behind `sys_platform == 'win32'`, so the install works
+  on macOS/Linux. The install is read-only-safe: the server only reads its bundled assets, and its
+  writable state (the per-user viewed registry and the user's content folder) lives outside the
+  package.
+- The same layout keeps the **development** workflow working: `uv sync` / `uv run python -m app.main`
+  and the `start_md` launchers install the project as an editable package and resolve `to-html/` at
+  the repo root exactly as before.
+
 ## VS Code Extension
 The VS Code extension lives under `vscode-extension/` and packages MD Activator as a VS Code desktop extension.
 
@@ -179,3 +206,9 @@ Packaging behavior:
   real runtime and imports `app.main` from the produced payload, so a non-importable
   release (for example a missing package `__init__.py`) fails the build instead of
   shipping silently.
+- The payload doubles as an installable-package source: because it carries
+  `pyproject.toml`, `app/`, `to-html/`, and `README.md`, the committed
+  `khtwo/md-activator` repository is directly usable with
+  `uv tool install git+https://github.com/khtwo/md-activator` (see
+  **Installable Distribution** above). This is guarded by a test that builds a wheel from
+  the produced payload and asserts the `md-activator` entry point and bundled `to-html/`.

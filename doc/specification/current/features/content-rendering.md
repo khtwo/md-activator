@@ -93,3 +93,9 @@ The renderer must not convert a `.md` suffix that is part of a full `http` or
 intact in the rendered paragraph.
 
 Fenced code blocks remain literal.
+
+## Invariants & design constraints
+_Maintainer rules the behavior above depends on — recorded so a future change does not silently break them. Migrated from working memory 2026-07-02; see change package `../../changes/2026-07-02-memory-invariants-backfill/`._
+
+- **File-line-number preservation.** Rendered HTML embeds absolute 1-based file line numbers: checkbox markers carry `data-checkbox-line`, non-diagram code blocks carry source-line/occurrence metadata, and Mermaid/maxGraph containers carry `data-*-line` anchors. Write-back re-reads the file and indexes `lines[line - 1]`. Therefore **any transform applied to content at or above interactive markers must preserve the file's line count** — blank lines in place (replace content with `""`, keep the `\n`), never add or delete lines. Front-matter blanking and the paragraph/list separator insertion both obey this (and the separator pass is sequenced *after* checkbox/code-block metadata capture). Adding or removing a line above a marker desyncs every downstream checkbox toggle, code-block edit, and diagram anchor. Change packages: `../../changes/2026-06-15-checkbox-codeblock-line-stability/`, `../../changes/2026-06-15-frontmatter-table/`.
+- **Code-block HTML has a single source.** Non-diagram fenced code-block HTML is emitted by the viewer's own code-block extractor during pre-processing (it pulls each closed non-diagram fence into a placeholder and pre-renders it), **not** by the `markdown` package's `fenced_code` extension, which is effectively bypassed for real code blocks. To change rendered code-block markup (classes, default language, escaping) edit the extractor's emitter, not the extension or the `markdown.markdown(...)` call.
