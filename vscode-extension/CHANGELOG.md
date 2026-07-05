@@ -2,6 +2,7 @@
 
 ## 0.1.6
 
+- Enable install by uv tool install git+https://github.com/khtwo/md-activator, then run md-activator to launch local web server
 - Set [x] Confirmed for demo md file
 
 ## 0.1.5

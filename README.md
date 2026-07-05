@@ -4,7 +4,21 @@ A local-first, lightweight Markdown workflow tool for AI-assisted development.
 
 Turn plain `.md` files into interactive pages with checkboxes, progress bars, Mermaid diagrams, editable text blocks, buttons, and write-back updates.
 
-## Start
+## Install & Run
+
+```code
+uv tool install git+https://github.com/khtwo/md-activator
+```
+
+then 
+
+```code
+md-activator <parameters>
+```
+
+## Clone
+
+Clone repo to local
 
 ```bat
 start_md.bat
