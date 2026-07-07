@@ -77,8 +77,11 @@ single external URL link rather than becoming an in-app local markdown link. A
 trailing run of common sentence punctuation (`.`, `,`, `;`, `:`, `!`, `?`), or a
 trailing `)`, `]`, or `>`, immediately after a bare URL is kept outside the link
 target. The bare-URL pass does not match a URL whose scheme immediately follows
-a `<`, `[`, or `(`, so URLs already written as Markdown link targets (`](...)`)
-or autolinks (`<...>`) are not re-wrapped.
+a `<` or `[`, so URLs already written as Markdown link labels or autolinks
+(`<...>`) are not re-wrapped; a URL already written as a Markdown link target
+(`](...)`) is left untouched by the emitter's link-target guard. A bare URL that
+opens inside prose parentheses — `(https://example.com)` — is linkified, with the
+closing `)` kept outside the link target.
 
 The renderer converts local `.md`, `.yml`, `.yaml`, `.json`, and `.jsonl` path references into clickable in-app viewer links when they are:
 - Inline-code path references, such as `` `docs/example.md` ``, `` `config/app.yml` ``, or `` `data/records.json` ``.
@@ -87,6 +90,8 @@ The renderer converts local `.md`, `.yml`, `.yaml`, `.json`, and `.jsonl` path r
 `.yml` and `.yaml` references match case-insensitively and open in the viewer (rendered as a YAML tree) rather than as file downloads. `.json` and `.jsonl` references likewise match case-insensitively and open in the viewer (rendered as a JSON tree) rather than as file downloads.
 
 These local-path passes do not require the referenced file to exist on disk: a matching `.md`, `.yml`, `.yaml`, `.json`, or `.jsonl` reference becomes a viewer link unconditionally (unlike non-viewer download references, which stay literal when the file is missing). The local-path passes also leave references that are already part of a Markdown link untouched: an inline-code or bare path immediately followed by `](` (used as a link label) or immediately preceded by `](` (already a link target) is not re-wrapped.
+
+A bare reference that opens inside prose parentheses — for example `(../../doc/work-order/work-order.md #1)` — is linkified like the same reference in open prose: the `../../doc/work-order/work-order.md` part becomes a viewer link while the leading `(` and the trailing whitespace-then-`#1)` stay literal. An opening `(` alone does not suppress linkification; only a Markdown link target (`](...)`) is protected, by the immediately-preceding-`](` guard above. The reference token ends at the first whitespace, and a trailing `)` immediately after the reference is kept outside the link target. This applies uniformly to the viewer-path, download-file, and local-image bare passes.
 
 The renderer must not convert a `.md` suffix that is part of a full `http` or
 `https` URL into a separate local markdown link; the full URL text remains

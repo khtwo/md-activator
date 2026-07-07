@@ -36,13 +36,13 @@ BACKTICK_RUN_RE = re.compile(r"`+")
 CODE_LANGUAGE_RE = re.compile(r"^[A-Za-z0-9_+.-]+$")
 MD_LINK_RE = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
 INLINE_MD_PATH_RE = re.compile(r"`(?P<path>(?:[A-Za-z0-9_.-]+[\\/])*[A-Za-z0-9_.-]+\.md)`")
-BARE_MD_PATH_RE = re.compile(r"(?<![\w./(:\[-])(?P<path>(?:[A-Za-z0-9_.-]+[\\/])*[A-Za-z0-9_.-]+\.md)(?![\w./)\]-])")
+BARE_MD_PATH_RE = re.compile(r"(?<![\w./:\[-])(?P<path>(?:[A-Za-z0-9_.-]+[\\/])*[A-Za-z0-9_.-]+\.md)(?![\w./)\]-])")
 INLINE_YAML_PATH_RE = re.compile(
     r"`(?P<path>(?:[A-Za-z0-9_.-]+[\\/])*[A-Za-z0-9_.-]+\.ya?ml)`",
     re.IGNORECASE,
 )
 BARE_YAML_PATH_RE = re.compile(
-    r"(?<![\w./(:\[-])(?P<path>(?:[A-Za-z0-9_.-]+[\\/])*[A-Za-z0-9_.-]+\.ya?ml)(?![\w./)\]-])",
+    r"(?<![\w./:\[-])(?P<path>(?:[A-Za-z0-9_.-]+[\\/])*[A-Za-z0-9_.-]+\.ya?ml)(?![\w./)\]-])",
     re.IGNORECASE,
 )
 INLINE_JSON_PATH_RE = re.compile(
@@ -50,16 +50,16 @@ INLINE_JSON_PATH_RE = re.compile(
     re.IGNORECASE,
 )
 BARE_JSON_PATH_RE = re.compile(
-    r"(?<![\w./(:\[-])(?P<path>(?:[A-Za-z0-9_.-]+[\\/])*[A-Za-z0-9_.-]+\.jsonl?)(?![\w./)\]-])",
+    r"(?<![\w./:\[-])(?P<path>(?:[A-Za-z0-9_.-]+[\\/])*[A-Za-z0-9_.-]+\.jsonl?)(?![\w./)\]-])",
     re.IGNORECASE,
 )
-BARE_HTTP_URL_RE = re.compile(r"(?<![<\[(])(?P<url>https?://[^\s<>\])]+)", re.IGNORECASE)
+BARE_HTTP_URL_RE = re.compile(r"(?<![<\[])(?P<url>https?://[^\s<>\])]+)", re.IGNORECASE)
 MARKDOWN_LINK_RE = re.compile(r"(?<!!)\[(?P<label>[^\]]+)\]\((?P<href>[^)]+)\)")
 INLINE_FILE_PATH_RE = re.compile(
     r"`(?P<path>(?:[A-Za-z0-9_.-]+[\\/])*[A-Za-z0-9_.-]+\.[A-Za-z0-9][A-Za-z0-9_.-]*)`"
 )
 BARE_FILE_PATH_RE = re.compile(
-    r"(?<![\w./(:\[-])(?P<path>(?:[A-Za-z0-9_.-]+[\\/])*[A-Za-z0-9_.-]+\.[A-Za-z0-9][A-Za-z0-9_.-]*)(?![\w./)\]-])"
+    r"(?<![\w./:\[-])(?P<path>(?:[A-Za-z0-9_.-]+[\\/])*[A-Za-z0-9_.-]+\.[A-Za-z0-9][A-Za-z0-9_.-]*)(?![\w./)\]-])"
 )
 IMAGE_MARKDOWN_RE = re.compile(r"!\[(?P<alt>[^\]]*)\]\((?P<href>[^)]+)\)")
 INLINE_IMAGE_PATH_RE = re.compile(
@@ -71,7 +71,7 @@ BARE_IMAGE_URL_RE = re.compile(
     re.IGNORECASE,
 )
 BARE_IMAGE_PATH_RE = re.compile(
-    r"(?<![\w./(:\[-])(?P<path>(?:[A-Za-z0-9_.-]+[\\/])*[A-Za-z0-9_.-]+\.(?:png|jpe?g|gif|webp|bmp|svg))(?![\w./)\]-])",
+    r"(?<![\w./:\[-])(?P<path>(?:[A-Za-z0-9_.-]+[\\/])*[A-Za-z0-9_.-]+\.(?:png|jpe?g|gif|webp|bmp|svg))(?![\w./)\]-])",
     re.IGNORECASE,
 )
 FENCE_RE = re.compile(r"^\s*(```|~~~)")
