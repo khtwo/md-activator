@@ -62,6 +62,7 @@ Extension manifest:
 - Includes local VSIX listing metadata: display name, description, categories, keywords, README, changelog, icon, publisher ID, and license reference.
 
 Preview command behavior:
+- Determines the previewable markdown file the same way the editor-title icon decides visibility: the resolved file counts as markdown when the editor language id is `markdown` **or** its path has a supported markdown extension (`.md`, `.markdown`, `.mdown`, `.mkdn`, case-insensitive, matching the extension's own `isMarkdownFilePath`). This applies to both invocation paths — an editor-title icon click (which passes the clicked resource) and a Command Palette / keybinding invocation (which uses the active editor) — so a `.md` file whose language id VS Code reassigned by content-based language detection (e.g. a `SKILL.md`/`CLAUDE.md` whose YAML frontmatter is detected as `yaml`) is previewed rather than rejected. The command keeps refusing genuinely non-markdown resources (a non-`markdown` language id whose path is also not a supported markdown extension) with the "Open a markdown file..." error.
 - When invoked from a workspace markdown file, uses that workspace folder as the content root.
 - When invoked from a standalone markdown file outside a workspace, uses the file's parent folder as the content root.
 - Computes the preview URL path as the markdown file path relative to the selected content root, normalized with `/` separators.

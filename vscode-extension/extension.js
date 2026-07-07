@@ -276,10 +276,17 @@ function workspaceRoots(vscode) {
 
 function activeMarkdownFile(vscode) {
   const editor = vscode.window.activeTextEditor;
-  if (!editor || editor.document.uri.scheme !== "file" || editor.document.languageId !== "markdown") {
+  if (!editor || editor.document.uri.scheme !== "file") {
     return null;
   }
-  return editor.document.uri.fsPath;
+  const filePath = editor.document.uri.fsPath;
+  // Match the editor-title icon condition: previewable when the language id is markdown OR the
+  // path has a supported markdown extension, so a .md file whose language id VS Code reassigned
+  // by content detection (e.g. SKILL.md/CLAUDE.md detected as yaml) is still accepted.
+  if (editor.document.languageId === "markdown" || isMarkdownFilePath(filePath)) {
+    return filePath;
+  }
+  return null;
 }
 
 function isMarkdownFilePath(filePath) {
@@ -294,10 +301,13 @@ function markdownFileFromCommandResource(vscode, resourceUri) {
   const matchingDocument = (vscode.workspace.textDocuments || []).find(
     (document) => document.uri && document.uri.fsPath === resourceUri.fsPath,
   );
-  if (matchingDocument) {
-    return matchingDocument.languageId === "markdown" ? resourceUri.fsPath : null;
+  if (matchingDocument && matchingDocument.languageId === "markdown") {
+    return resourceUri.fsPath;
   }
 
+  // No open document, or one whose language id VS Code reassigned away from markdown (e.g. a
+  // SKILL.md/CLAUDE.md whose YAML frontmatter is detected as yaml): fall back to the markdown
+  // extension check so the command accepts the same files the editor-title icon shows on.
   return isMarkdownFilePath(resourceUri.fsPath) ? resourceUri.fsPath : null;
 }
 

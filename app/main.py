@@ -23,6 +23,7 @@ from .new_files import (
     DEFAULT_SPAN_DAYS,
     SPAN_DAYS_ENV,
     NewFilesService,
+    contains_confirm_marker,
     contains_unchecked_confirm,
     resolve_span_days,
 )
@@ -97,6 +98,9 @@ new_files_service = NewFilesService(
     CONTENT_ROOT,
     span_days=resolve_span_days(),
     priority_filter=contains_unchecked_confirm,
+    # Mark confirmation-type files (any `Confirm` marker, checked or unchecked) so their desktop
+    # *change* notification fires only when the confirmation status flips, not on ordinary edits.
+    confirm_filter=contains_confirm_marker,
     # Raise a native desktop notification (offloaded to a daemon thread so a toast never blocks
     # the poll) when the detector finds .md files created/changed after the session baseline.
     notifier=schedule_change_notification,

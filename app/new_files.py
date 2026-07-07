@@ -191,35 +191,33 @@ def _closing_fence_re(opening_fence: str) -> re.Pattern[str]:
     return re.compile(rf"^[ \t]{{0,3}}{fence_char}{{{fence_length},}}[ \t]*$")
 
 
-def contains_unchecked_confirm(path: Path) -> bool:
-    """Return whether *path* needs review: its **last** confirm marker (outside any fenced code
-    block) is unchecked.
+def _last_confirm_marker(path: Path) -> str | None:
+    """Classify *path*'s **last** confirm marker (outside any fenced code block).
 
-    A *confirm marker* is a line whose leading content is a checkbox — checked (``[x]``/``[X]``)
-    or unchecked (``[ ]``/``[]``) — followed, optionally via a button-label ``[`` (with or without
-    a closing ``]``) and/or markdown bold ``**``, by the word "confirm" (case-insensitive):
-    ``[ ] Confirm``, ``[ ] **Confirm**``, ``[ ] [Confirm]``, ``[ ] [confirm`` (open button-label),
-    ``- [ ] confirm …``, ``[x] [confirm]``. A mid-sentence prose mention does not match.
+    Returns ``"unchecked"`` when that marker's checkbox is empty (``[ ]``/``[]``), ``"checked"``
+    when it is ``[x]``/``[X]``, or ``None`` when the file has no confirm marker outside a fence (an
+    unreadable file also yields ``None``).
 
-    Only the **last** confirm marker decides: a file needs review when that marker is unchecked,
-    and does not when it is checked — even if an earlier confirm marker is still unchecked
-    (earlier markers are treated as superseded). A file with no confirm marker never needs review.
+    A *confirm marker* is a line whose leading content is a checkbox — checked or unchecked —
+    followed, optionally via a button-label ``[`` (with or without a closing ``]``) and/or markdown
+    bold ``**``, by the word "confirm" (case-insensitive): ``[ ] Confirm``, ``[ ] **Confirm**``,
+    ``[ ] [Confirm]``, ``[ ] [confirm`` (open button-label), ``- [ ] confirm …``, ``[x] [confirm]``.
+    A mid-sentence prose mention does not match.
 
-    A marker inside a fenced code block (an opening fence of 3+ backticks/tildes through its
-    closing fence; an unclosed fence runs to end of file) is literal code text — the renderer
-    shows it as code, not an actionable checkbox — so it is skipped when locating the last marker.
-    Unreadable files degrade to ``False`` rather than erroring the scan; this is the
-    content-filter / priority seam the notification service injects.
+    Only the **last** marker decides: a later marker supersedes earlier ones. A marker inside a
+    fenced code block (an opening fence of 3+ backticks/tildes through its closing fence; an
+    unclosed fence runs to end of file) is literal code text — the renderer shows it as code, not
+    an actionable checkbox — so it is skipped when locating the last marker.
     """
     try:
         text = path.read_text(encoding="utf-8", errors="ignore")
     except OSError:
-        return False
+        return None
     # `closing_fence_re` doubles as the in-block flag: None outside a fence, otherwise the
     # matcher for the line that closes the current fenced block.
     closing_fence_re: re.Pattern[str] | None = None
-    # The checked-state of the last confirm marker seen outside a fence; None until one is found.
-    last_marker_unchecked: bool | None = None
+    # The last confirm marker seen outside a fence ("unchecked"/"checked"); None until one is found.
+    last_marker: str | None = None
     for line in text.splitlines():
         if closing_fence_re is None:
             fence_open = _FENCE_OPEN_RE.match(line)
@@ -229,10 +227,34 @@ def contains_unchecked_confirm(path: Path) -> bool:
             match = _CONFIRM_MARKER_RE.match(line)
             if match is not None:
                 # Empty or single-space bracket body → unchecked; `x`/`X` → checked.
-                last_marker_unchecked = match.group("mark").strip() == ""
+                last_marker = "unchecked" if match.group("mark").strip() == "" else "checked"
         elif closing_fence_re.match(line):
             closing_fence_re = None
-    return bool(last_marker_unchecked)
+    return last_marker
+
+
+def contains_unchecked_confirm(path: Path) -> bool:
+    """Return whether *path* needs review: its **last** confirm marker (outside any fenced code
+    block) is unchecked.
+
+    See :func:`_last_confirm_marker` for the marker grammar and fenced-code handling. A file with
+    no confirm marker, or whose last marker is checked, never needs review. This is the
+    content-filter / priority seam the notification service injects; unreadable files degrade to
+    ``False`` rather than erroring the scan.
+    """
+    return _last_confirm_marker(path) == "unchecked"
+
+
+def contains_confirm_marker(path: Path) -> bool:
+    """Return whether *path* is a **confirmation-type file**: it has any confirm marker — checked
+    or unchecked — outside a fenced code block.
+
+    See :func:`_last_confirm_marker` for the marker grammar and fenced-code handling. Wired as the
+    notification service's ``confirm_filter`` seam so a confirmation file's desktop *change*
+    notification is gated on a confirm-status flip rather than on any content edit. Unreadable
+    files degrade to ``False``.
+    """
+    return _last_confirm_marker(path) is not None
 
 
 def _default_activity_time(path: Path) -> float:
@@ -264,6 +286,10 @@ class _ScannedFile:
     created_epoch: float
     created_display: str  # "YYYY-MM-DD HH:MM:SS" in local time, second precision
     needs_review: bool = False
+    # Whether the file is a confirmation-type file (has any `Confirm` marker, checked or
+    # unchecked, outside code fences). Gates its desktop *change* notification: a confirmation
+    # file notifies on "changed" only when `needs_review` flips, not on every content edit.
+    is_confirm_file: bool = False
 
 
 @dataclass
@@ -434,6 +460,7 @@ class NewFilesService:
         ignored_paths: IgnoredPaths = git_ignored_paths,
         content_filter: Callable[[Path], bool] | None = None,
         priority_filter: Callable[[Path], bool] | None = None,
+        confirm_filter: Callable[[Path], bool] | None = None,
         notifier: Callable[[str], None] | None = None,
         notify_interval: float = NOTIFY_THROTTLE_SECONDS,
     ) -> None:
@@ -458,6 +485,14 @@ class NewFilesService:
         # tagged ``needs_review`` and floated to the front of the order (review-first), so the
         # notification list shows files awaiting confirmation before ordinary new files.
         self._priority_filter = priority_filter
+        # Optional confirmation-file predicate: when set, files it accepts are tagged
+        # ``is_confirm_file`` and their desktop *change* notification is gated on a confirm-status
+        # flip (``needs_review`` changing) rather than on any activity-time advance — an ordinary
+        # edit to a confirmation file does not notify. ``None`` (the default) treats no file as a
+        # confirmation file, so the change diff behaves exactly as before. It is a separate content
+        # read from ``priority_filter``; the in-span set is bounded and the scan is poll-throttled,
+        # so the extra read is negligible and keeps the two seams decoupled.
+        self._confirm_filter = confirm_filter
         # Optional desktop-notification sink: called with a ready-to-display message when the
         # detector finds .md files created/changed after the session baseline (the previously
         # cached set). None (the default) disables notifications, so the service and its unit
@@ -527,6 +562,9 @@ class NewFilesService:
             needs_review = (
                 bool(self._priority_filter(md_path)) if self._priority_filter is not None else False
             )
+            is_confirm_file = (
+                bool(self._confirm_filter(md_path)) if self._confirm_filter is not None else False
+            )
             records.append(
                 _ScannedFile(
                     path=self._to_relative(md_path),
@@ -534,6 +572,7 @@ class NewFilesService:
                     created_epoch=created_epoch,
                     created_display=_format_timestamp(created_epoch),
                     needs_review=needs_review,
+                    is_confirm_file=is_confirm_file,
                 )
             )
         # Newest activity first; stable filename-ascending tie-break for equal timestamps.
@@ -647,17 +686,26 @@ class NewFilesService:
     ) -> list[tuple[_ScannedFile, str]]:
         """Files in *current* created or changed relative to *previous*, each with its verb.
 
-        ``created`` when the path is absent from *previous*; ``changed`` when the path is present
-        but its activity epoch increased (the file was modified after the session last saw it). A
-        merely re-ordered or removed file is not a candidate.
+        ``created`` when the path is absent from *previous*. For a path present in both:
+        - a **confirmation-type file** (``is_confirm_file``) is ``changed`` **only when its
+          confirmation status flipped** — its ``needs_review`` (last confirm marker unchecked)
+          differs from the previous scan's. An edit that leaves the status unchanged (including an
+          edit to an already-checked file) is **not** a candidate, regardless of activity epoch;
+        - any other file is ``changed`` when its activity epoch increased (modified after the
+          session last saw it).
+
+        A merely re-ordered or removed file is not a candidate.
         """
-        previous_epoch = {record.path: record.created_epoch for record in previous}
+        previous_by_path = {record.path: record for record in previous}
         candidates: list[tuple[_ScannedFile, str]] = []
         for record in current:
-            prior = previous_epoch.get(record.path)
+            prior = previous_by_path.get(record.path)
             if prior is None:
                 candidates.append((record, "created"))
-            elif record.created_epoch > prior:
+            elif record.is_confirm_file:
+                if record.needs_review != prior.needs_review:
+                    candidates.append((record, "changed"))
+            elif record.created_epoch > prior.created_epoch:
                 candidates.append((record, "changed"))
         return candidates
 

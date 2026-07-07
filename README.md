@@ -6,6 +6,8 @@ Turn plain `.md` files into interactive pages with checkboxes, progress bars, Me
 
 ## Install & Run
 
+Make sure you have installed Python 3.11+ and `uv`.
+
 ```code
 uv tool install git+https://github.com/khtwo/md-activator
 ```
@@ -14,6 +16,11 @@ then
 
 ```code
 md-activator <parameters>
+```
+## Upgrade to latest after install
+
+```code
+uv tool upgrade md-activator
 ```
 
 ## Clone
