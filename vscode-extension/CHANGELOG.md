@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.7
+
+- Enable url render inside ()
+- Fix issue that path link are not fully rendered and break at "-"
+- For confirmation markdown file/s, only raise notification when confirmation status is changed
+- In vscode, treat SKILL.md as markdown and show md-activator icon
+- Add upgrade instruction
+
 ## 0.1.6
 
 - Enable install by uv tool install git+https://github.com/khtwo/md-activator, then run md-activator to launch local web server
