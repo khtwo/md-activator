@@ -3,6 +3,13 @@ const maxGraphColor = (value) => {
   return value;
 };
 
+// Fill honors the maxGraph `none` keyword. Unlike stroke/font (which treat `none` as an
+// unsupported value and fall back to the CSS default), a `fillColor` of `none` is kept as the
+// literal `none` so the node shape renders with a transparent interior — the diagram background
+// shows through — matching draw.io/maxGraph. An absent/empty `fillColor` is distinct: it stays
+// undefined and falls back to the opaque CSS default fill.
+const maxGraphFillColor = (value) => (value === 'none' ? 'none' : maxGraphColor(value));
+
 const normalizeMaxGraphStyleMode = (styleMode) => {
   if (styleMode === MAXGRAPH_STYLE_MODE_COLOR_ALL) return MAXGRAPH_STYLE_MODE_COLOR_ALL;
   if (styleMode === MAXGRAPH_STYLE_MODE_COLOR) return MAXGRAPH_STYLE_MODE_COLOR;
@@ -49,7 +56,7 @@ const normalizeMaxGraphArrowStyle = (value, fallback = 'classic') => {
 const isMaxGraphArrowVisible = (arrowStyle) => arrowStyle !== 'none';
 
 const getMaxGraphNodeDisplayStyle = (style = {}, styleMode = MAXGRAPH_STYLE_MODE_NORMAL) => ({
-  fillColor: isMaxGraphStyleColorAllMode(styleMode) ? maxGraphColor(style.fillColor) : undefined,
+  fillColor: isMaxGraphStyleColorAllMode(styleMode) ? maxGraphFillColor(style.fillColor) : undefined,
   strokeColor: isMaxGraphStyleColorMode(styleMode) ? maxGraphColor(style.strokeColor) : undefined,
   fontColor: isMaxGraphStyleColorMode(styleMode) ? maxGraphColor(style.fontColor) : undefined,
   labelBackgroundColor: isMaxGraphStyleColorAllMode(styleMode) ? maxGraphColor(style.labelBackgroundColor) : undefined,

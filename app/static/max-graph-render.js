@@ -133,7 +133,13 @@ const appendMaxGraphNode = (
     class: 'maxgraph-node-shape',
     style: maxGraphInlineStyle({
       fill: displayStyle.fillColor,
-      stroke: displayStyle.strokeColor
+      stroke: displayStyle.strokeColor,
+      // A transparent node (fillColor=none) has no painted interior, so the default
+      // `visiblePainted` hit test would let interior clicks fall through to the canvas —
+      // starting a pan instead of a node drag. `pointer-events: all` keeps the whole box a
+      // pointer target for dragging/selecting/title-editing, matching how maxGraph keeps
+      // no-fill shapes clickable. Opaque nodes keep the default hit behavior.
+      'pointer-events': displayStyle.fillColor === 'none' ? 'all' : undefined
     })
   };
 
