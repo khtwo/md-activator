@@ -3,12 +3,18 @@ const maxGraphColor = (value) => {
   return value;
 };
 
-// Fill honors the maxGraph `none` keyword. Unlike stroke/font (which treat `none` as an
-// unsupported value and fall back to the CSS default), a `fillColor` of `none` is kept as the
-// literal `none` so the node shape renders with a transparent interior — the diagram background
-// shows through — matching draw.io/maxGraph. An absent/empty `fillColor` is distinct: it stays
-// undefined and falls back to the opaque CSS default fill.
-const maxGraphFillColor = (value) => (value === 'none' ? 'none' : maxGraphColor(value));
+// Node fill honors the maxGraph `none` keyword in EVERY style mode. `none` means *no fill* (a
+// transparent interior — the diagram background shows through), which is the absence of a fill
+// rather than a color choice; a grouping/container cell therefore stays see-through even in
+// normal/color mode, where authored fill *colors* are otherwise suppressed. A real fill color is
+// still gated to color-all mode (normal/color -> undefined -> opaque CSS default). An absent/empty
+// value stays undefined (default fill) in every mode, so `none` and absent remain distinct.
+// (Stroke/font/label-background are unaffected: maxGraphColor still treats their `none` as an
+// unsupported value that falls back to the CSS default.)
+const maxGraphNodeFillColor = (value, styleMode) => {
+  if (value === 'none') return 'none';
+  return isMaxGraphStyleColorAllMode(styleMode) ? maxGraphColor(value) : undefined;
+};
 
 const normalizeMaxGraphStyleMode = (styleMode) => {
   if (styleMode === MAXGRAPH_STYLE_MODE_COLOR_ALL) return MAXGRAPH_STYLE_MODE_COLOR_ALL;
@@ -56,7 +62,7 @@ const normalizeMaxGraphArrowStyle = (value, fallback = 'classic') => {
 const isMaxGraphArrowVisible = (arrowStyle) => arrowStyle !== 'none';
 
 const getMaxGraphNodeDisplayStyle = (style = {}, styleMode = MAXGRAPH_STYLE_MODE_NORMAL) => ({
-  fillColor: isMaxGraphStyleColorAllMode(styleMode) ? maxGraphFillColor(style.fillColor) : undefined,
+  fillColor: maxGraphNodeFillColor(style.fillColor, styleMode),
   strokeColor: isMaxGraphStyleColorMode(styleMode) ? maxGraphColor(style.strokeColor) : undefined,
   fontColor: isMaxGraphStyleColorMode(styleMode) ? maxGraphColor(style.fontColor) : undefined,
   labelBackgroundColor: isMaxGraphStyleColorAllMode(styleMode) ? maxGraphColor(style.labelBackgroundColor) : undefined,
