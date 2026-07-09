@@ -51,6 +51,11 @@ NEW_FILES_PAGE_SIZE = 10
 # detected inside the window coalesce into the single notification already raised (they are
 # still absorbed into the cached collection, but do not raise their own popup).
 NOTIFY_THROTTLE_SECONDS = 3.0
+# Per-file cooldown (layered ON TOP of the global throttle above): an individual .md file is not
+# re-announced within this many seconds of the last notification that covered it, so a file saved
+# repeatedly is announced at most once a minute instead of once every few seconds. Per file and
+# additive — it filters which candidates are eligible before the global 3-second floor applies.
+PER_FILE_NOTIFY_THROTTLE_SECONDS = 60.0
 # Fixed per-user registry holding the persisted per-file last-view timestamps. It lives in the user's
 # home directory (NOT inside the served content root) so a single registry is shared across
 # every served folder; entries are stored as absolute paths so viewed state carries across
@@ -463,6 +468,7 @@ class NewFilesService:
         confirm_filter: Callable[[Path], bool] | None = None,
         notifier: Callable[[str], None] | None = None,
         notify_interval: float = NOTIFY_THROTTLE_SECONDS,
+        per_file_notify_interval: float = PER_FILE_NOTIFY_THROTTLE_SECONDS,
     ) -> None:
         self._root_dir = root_dir.resolve()
         # Per-file representative epoch (the later of creation/modification — see
@@ -502,6 +508,13 @@ class NewFilesService:
         self._notifier = notifier
         self._notify_interval = notify_interval
         self._last_notified_at: float | None = None
+        # Per-file cooldown floor and its state: content-root-relative path -> the clock time of
+        # the last popup that covered that file. A candidate whose file appears here within
+        # ``_per_file_notify_interval`` seconds is suppressed, so one file is not re-announced more
+        # than once per interval (independently of the global ``_last_notified_at`` throttle above).
+        # Mutated only inside ``_select_notification``, which already runs under ``self._lock``.
+        self._per_file_notify_interval = per_file_notify_interval
+        self._file_notified_at: dict[str, float] = {}
         # Cached scan result (R9): paging slices this; only detect() refreshes it. Guarded
         # by a lock because the poll (detector) may refresh it while a page request reads it.
         self._cache: list[_ScannedFile] | None = None
@@ -666,19 +679,44 @@ class NewFilesService:
     ) -> str | None:
         """Return a throttled notification body for files created/changed vs *previous*, or None.
 
-        Returns None when there are no created/changed candidates, or when a notification was
-        already raised within ``notify_interval`` seconds (bursts coalesce into that one). When a
-        notification is due, records the send time (``self._clock``) and returns the message.
-        Runs under ``self._lock`` (it guards ``_last_notified_at``).
+        Two layered throttles decide what is announced (both measured on ``self._clock``):
+        - a **per-file cooldown** drops any candidate whose file was covered by a notification
+          raised less than ``per_file_notify_interval`` seconds ago, so one file is not
+          re-announced within that window (independent of other files);
+        - the surviving candidates then pass the **global** one-per-``notify_interval``-seconds
+          throttle — a burst coalesces into the single notification already raised.
+
+        Returns None when there are no created/changed candidates, when none survive the per-file
+        cooldown, or when a notification was already raised within ``notify_interval`` seconds.
+        When a notification is due, records the send time as both the global ``_last_notified_at``
+        and the per-file time for every file the popup covers, then returns the message. Runs under
+        ``self._lock`` (it guards ``_last_notified_at`` and ``_file_notified_at``).
         """
         candidates = self._new_change_candidates(previous, current)
         if not candidates:
             return None
         now = self._clock()
+        # Per-file cooldown. Drop entries older than the cooldown first: they no longer suppress
+        # anything, so pruning both enforces the window by membership and bounds the map. Then a
+        # candidate is fresh iff its file is not (still) in the map.
+        self._file_notified_at = {
+            path: at
+            for path, at in self._file_notified_at.items()
+            if now - at < self._per_file_notify_interval
+        }
+        fresh = [
+            candidate for candidate in candidates if candidate[0].path not in self._file_notified_at
+        ]
+        if not fresh:
+            return None
+        # Global throttle over the surviving candidates: a coalesced burst is absorbed (cache
+        # already swapped) without a popup, and leaves both throttle states untouched.
         if self._last_notified_at is not None and now - self._last_notified_at < self._notify_interval:
             return None
         self._last_notified_at = now
-        return self._format_notification(candidates)
+        for record, _verb in fresh:
+            self._file_notified_at[record.path] = now
+        return self._format_notification(fresh)
 
     @staticmethod
     def _new_change_candidates(
