@@ -33,6 +33,7 @@ Current committed tests cover:
 - VS Code extension manifest, staging, and runtime helper behavior.
 - Local VSIX packaging behavior.
 - Single-file (`--open`) ready announcement: Windows toast success (no console line) and toast-failure console fallback, and on non-Windows opening the announced URL in the default browser, with the console fallback when no browser can be launched (`open` returns false) or the open call raises.
+- Default-port auto-fallback selection: preferred port 8000 used when free, ascending fallback scan over 20000–20999 when busy (with the console substitution notice), exhaustion raising a usage error, the real-socket bind probe (held port unavailable, released port available), explicit `--port` passed through with no probe, and the `--open` announcement carrying the resolved fallback port.
 - Cross-platform test execution: the `.bat` launcher/packaging tests (`test_start_bat`, `test_release_bat`, `test_vsix_package_bat`, `test_release_version_bat`) are gated to Windows (`sys.platform == "win32"`) so they skip rather than error on macOS/Linux, while the plain-text assertions over `.bat` script contents stay cross-platform.
 
 Browser URL/history and dropdown interaction are specified and manually verifiable; dedicated browser automation is not currently committed.

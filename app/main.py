@@ -14,7 +14,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
 
-from . import auto_shutdown
+from . import auto_shutdown, port_selection
 from .auto_shutdown import InactivityMonitor
 from .markdown_service import MarkdownRenderer
 from .markdown_services.mermaid_repair import repair_mermaid_source
@@ -230,7 +230,16 @@ def build_arg_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument("--host", default="127.0.0.1", help="Bind host. Defaults to 127.0.0.1.")
-    parser.add_argument("-p", "--port", type=int, default=8000, help="Bind port. Defaults to 8000.")
+    parser.add_argument(
+        "-p",
+        "--port",
+        type=int,
+        default=None,
+        help=(
+            "Bind port. When omitted, defaults to 8000; if 8000 is busy, the first "
+            "available port from 20000 is used instead. An explicit port is used as-is."
+        ),
+    )
     reload_group = parser.add_mutually_exclusive_group()
     reload_group.add_argument("--reload", dest="reload", action="store_true", help="Enable Uvicorn reload.")
     reload_group.add_argument("--no-reload", dest="reload", action="store_false", help="Disable Uvicorn reload.")
@@ -242,6 +251,20 @@ def build_arg_parser() -> argparse.ArgumentParser:
 def main(argv: Sequence[str] | None = None) -> int:
     parser = build_arg_parser()
     args = parser.parse_args(argv)
+
+    # Resolve the bind port before the --open branch so the announcement and uvicorn share
+    # it. Only the default (no explicit --port) auto-falls-back; an explicit port keeps
+    # exact bind-or-fail semantics (the VS Code extension passes its own chosen port).
+    if args.port is None:
+        try:
+            args.port = port_selection.select_port(args.host)
+        except port_selection.PortSelectionError as exc:
+            parser.error(str(exc))
+        if args.port != port_selection.PREFERRED_PORT:
+            print(
+                f"MD Activator: port {port_selection.PREFERRED_PORT} is in use; "
+                f"using port {args.port}."
+            )
 
     # Hand the span to the serving process: uvicorn re-imports ``app.main`` (a different
     # module object), so the module-level service is constructed from this env var, not args.
