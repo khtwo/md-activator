@@ -85,7 +85,7 @@ class FrontMatterRenderer:
         for index in range(closing + 1):
             blanked[index] = ""
         return FrontMatterSplit(
-            table_html=self._render_table(nodes),
+            table_html=f'<div class="markdown-table-wrap">{self._render_table(nodes)}</div>',
             body="\n".join(blanked),
             present=True,
         )

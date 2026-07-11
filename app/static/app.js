@@ -45,7 +45,7 @@ createApp({
         saveMermaidNodeTitle, saveMermaidEdgeTitle,
         loadFile: (path, base, options) => loadFile(path, base, options), showError: (e) => showError(e)
       });
-    const maxGraphAdd = createMaxGraphAddController({ getPath: () => currentPath.value, history: maxGraphEditHistory, loadFile: (path, base, options) => loadFile(path, base, options), showError: (e) => showError(e) }); const mermaidAdd = createMermaidAddController({ getPath: () => currentPath.value, history: maxGraphEditHistory, loadFile: (path, base, options) => loadFile(path, base, options), showError: (e) => showError(e) });
+    const maxGraphAdd = createMaxGraphAddController({ getPath: () => currentPath.value, history: maxGraphEditHistory, loadFile: (path, base, options) => loadFile(path, base, options), showError: (e) => showError(e) }); const mermaidAdd = createMermaidAddController({ getPath: () => currentPath.value, history: maxGraphEditHistory, loadFile: (path, base, options) => loadFile(path, base, options), showError: (e) => showError(e) }); const mermaidSource = createMermaidSourceToggle({ getPath: () => currentPath.value, history: maxGraphEditHistory, loadFile: (path, base, options) => loadFile(path, base, options), showError: (e) => showError(e) }); const maxGraphSource = createMaxGraphSourceToggle({ getPath: () => currentPath.value, history: maxGraphEditHistory, loadFile: (path, base, options) => loadFile(path, base, options), showError: (e) => showError(e) });
 
     const updateMaxGraphNodePosition = async ({ diagram, node, nodeId, previousX, previousY, x, y }) => {
       node.classList.add('maxgraph-node-saving');
@@ -212,7 +212,7 @@ createApp({
         getPath: () => currentPath.value, loadFile: (p, b, o) => loadFile(p, b, o), showError: (e) => showError(e)
       });
       setupMermaidZoomPan();
-      bindMermaidDiagramTitles(updateMermaidNodeTitle, updateMermaidEdgeTitle); bindMermaidDiagramSelection(); bindMermaidDiagramAddControls(mermaidAdd);
+      bindMermaidDiagramTitles(updateMermaidNodeTitle, updateMermaidEdgeTitle); bindMermaidDiagramSelection(); bindMermaidDiagramAddControls(mermaidAdd); mermaidSource.bind(); maxGraphSource.bind();
     };
 
     let latestRenderRequestId = 0;

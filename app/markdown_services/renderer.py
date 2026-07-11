@@ -44,6 +44,8 @@ from .models import (
     CheckboxUpdateResult,
     CodeBlockUpdateResult,
     MaxGraphBlockRestoreResult,
+    MaxGraphBlockSourceResult,
+    MaxGraphBlockUpdateResult,
     MaxGraphEdgeAddResult,
     MaxGraphEdgeDeleteResult,
     MaxGraphEdgeTitleUpdateResult,
@@ -54,6 +56,8 @@ from .models import (
     MaxGraphNodesPositionUpdateResult,
     MaxGraphNodeTitleUpdateResult,
     MermaidBlockRestoreResult,
+    MermaidBlockSourceResult,
+    MermaidBlockUpdateResult,
     MermaidEdgeAddResult,
     MermaidEdgeDeleteResult,
     MermaidEdgeTitleUpdateResult,
@@ -463,6 +467,16 @@ class MarkdownRenderer:
     ) -> MaxGraphBlockRestoreResult:
         return self._writeback_service.restore_maxgraph_block(path, line, index, xml)
 
+    def get_maxgraph_block_source(
+        self, path: str, line: int, index: int
+    ) -> MaxGraphBlockSourceResult:
+        return self._writeback_service.get_maxgraph_block_source(path, line, index)
+
+    def update_maxgraph_block(
+        self, path: str, line: int, index: int, xml: str
+    ) -> MaxGraphBlockUpdateResult:
+        return self._writeback_service.update_maxgraph_block(path, line, index, xml)
+
     def update_mermaid_node_title(
         self,
         path: str,
@@ -528,6 +542,16 @@ class MarkdownRenderer:
         self, path: str, line: int, index: int, source: str
     ) -> MermaidBlockRestoreResult:
         return self._writeback_service.restore_mermaid_block(path, line, index, source)
+
+    def get_mermaid_block_source(
+        self, path: str, line: int, index: int
+    ) -> MermaidBlockSourceResult:
+        return self._writeback_service.get_mermaid_block_source(path, line, index)
+
+    def update_mermaid_block(
+        self, path: str, line: int, index: int, source: str
+    ) -> MermaidBlockUpdateResult:
+        return self._writeback_service.update_mermaid_block(path, line, index, source)
 
     def repair_mermaid_block(self, path: str, line: int, index: int) -> MermaidRepairWritebackResult:
         return self._writeback_service.repair_mermaid_block(path, line, index)

@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.1.8
+
+- Source-toggle text mode is sticky: only the toggle click exits
+- Add maxGraph source toggle (</> text/diagram switch)
+- Add mermaid source toggle (</> text/diagram switch); delete-pick deletes nodes
+- Wrap tables in scroll container; cells break words only at column overflow
+- Raise file/folder and notification dropdown popup max height to 90vh
+- Auto-fallback default port: probe 8000, use first free 20000-20999 when busy
+- Render zero-node mermaid blocks as an editable empty canvas
+- Make background transparent when fillColor=none
+- Render maxGraph fillColor=none as a transparent node
+- Add per-file 60s cooldown to desktop change notifications
+
 ## 0.1.7
 
 - Enable url render inside ()

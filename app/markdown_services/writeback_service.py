@@ -55,10 +55,13 @@ from .models import (
     CHECKBOX_MARKER_RE,
     FENCED_CODE_START_RE,
     MERMAID_NODE_DIAGRAM_TYPES,
+    MERMAID_START_RE,
     UNCHECKED_MARKER,
     CheckboxUpdateResult,
     CodeBlockUpdateResult,
     MaxGraphBlockRestoreResult,
+    MaxGraphBlockSourceResult,
+    MaxGraphBlockUpdateResult,
     MaxGraphEdgeAddResult,
     MaxGraphEdgeDeleteResult,
     MaxGraphEdgeTitleUpdateResult,
@@ -70,6 +73,8 @@ from .models import (
     MaxGraphNodesPositionUpdateResult,
     MaxGraphNodeTitleUpdateResult,
     MermaidBlockRestoreResult,
+    MermaidBlockSourceResult,
+    MermaidBlockUpdateResult,
     MermaidEdgeAddResult,
     MermaidEdgeDeleteResult,
     MermaidEdgeTitleUpdateResult,
@@ -148,6 +153,9 @@ class WritebackService:
 
     def _iter_mermaid_blocks(self, lines: list[str]):
         return self._diagram_preprocessor._iter_mermaid_blocks(lines)
+
+    def _iter_maxgraph_blocks(self, lines: list[str]):
+        return self._diagram_preprocessor._iter_maxgraph_blocks(lines)
 
     def _update_maxgraph_block_node_position(self, block_text: str, node_id: str, x: float, y: float) -> str:
         return self._diagram_preprocessor._update_maxgraph_block_node_position(block_text, node_id, x, y)
@@ -808,6 +816,99 @@ class WritebackService:
         return MermaidBlockRestoreResult(relative_path, line, index)
 
     # ------------------------------------------------------------------ #
+    # Mermaid source toggle (block-source read / guarded block update)
+    # ------------------------------------------------------------------ #
+    def _locate_mermaid_block(self, path: str, line: int, index: int):
+        """Resolve ``path`` and locate the mermaid block at ``line``/``index``. Returns
+        ``(md_path, lines, content_start, content_end, is_fenced)``; raises the standard
+        FileNotFoundError / ValueError family otherwise."""
+        md_path = self._resolve_markdown_path(path)
+        if not md_path.exists() or not md_path.is_file():
+            raise FileNotFoundError(self._markdown_file_not_found_message(md_path))
+        if line < 1:
+            raise ValueError("mermaid block line must be 1 or greater")
+        if index < 0:
+            raise ValueError("mermaid block index must be 0 or greater")
+
+        lines = md_path.read_text(encoding="utf-8").splitlines(keepends=True)
+        if line > len(lines):
+            raise ValueError("mermaid block line is outside the markdown file")
+
+        text_lines = [self._line_text(single_line) for single_line in lines]
+        for block_index, anchor_line, content_start, content_end, is_fenced in (
+            self._iter_mermaid_blocks(text_lines)
+        ):
+            if block_index != index or anchor_line != line:
+                continue
+            return md_path, lines, content_start, content_end, is_fenced
+
+        raise ValueError("mermaid block not found at the requested line and index")
+
+    def get_mermaid_block_source(
+        self, path: str, line: int, index: int
+    ) -> MermaidBlockSourceResult:
+        """Read-only prefill for the source-toggle editor: the block's current on-disk body.
+        ``fenced`` lets the editor apply the empty-body rules (fenced empty is a valid save; a
+        raw block cannot be emptied). No write, no cache invalidation."""
+        md_path, lines, content_start, content_end, is_fenced = self._locate_mermaid_block(
+            path, line, index
+        )
+        return MermaidBlockSourceResult(
+            self._to_relative(md_path),
+            line,
+            index,
+            "".join(lines[content_start:content_end]),
+            is_fenced,
+        )
+
+    def update_mermaid_block(
+        self, path: str, line: int, index: int, source: str
+    ) -> MermaidBlockUpdateResult:
+        """Persist a source-toggle editor save, replacing the block body with ``source``.
+
+        Unlike ``restore_mermaid_block`` (verbatim snapshot writes for undo/redo), this
+        interactive-edit path guards the write: a raw block's first line must still be a
+        recognized diagram declaration, and the round-trip boundary guard re-scans the
+        would-be file and requires the same block (occurrence index, kind, anchor) with
+        content bounds exactly covering the replacement — so a fence-terminator line or a
+        raw body that stops being continuation lines is rejected and nothing is written.
+        An empty ``source`` on a fenced block is a valid save (the empty canvas)."""
+        md_path, lines, content_start, content_end, is_fenced = self._locate_mermaid_block(
+            path, line, index
+        )
+        if not is_fenced:
+            source_lines = source.splitlines()
+            if not source_lines or not MERMAID_START_RE.match(source_lines[0]):
+                raise ValueError(
+                    "a raw mermaid block's first line must remain a diagram declaration"
+                )
+
+        anchor_line = line
+        previous_block = "".join(lines[content_start:content_end])
+        new_lines = self._content_lines(source, lines)
+        candidate = lines[:content_start] + new_lines + lines[content_end:]
+
+        candidate_text = [self._line_text(single_line) for single_line in candidate]
+        expected = (anchor_line, content_start, content_start + len(new_lines), is_fenced)
+        found = None
+        for block_index, new_anchor, new_start, new_end, new_fenced in (
+            self._iter_mermaid_blocks(candidate_text)
+        ):
+            if block_index == index:
+                found = (new_anchor, new_start, new_end, new_fenced)
+                break
+        if found != expected:
+            raise ValueError(
+                "the edited source would change the mermaid block's boundaries; nothing was saved"
+            )
+
+        md_path.write_text("".join(candidate), encoding="utf-8")
+        self._invalidate_render_cache(md_path)
+        return MermaidBlockUpdateResult(
+            self._to_relative(md_path), line, index, previous_block, "".join(new_lines)
+        )
+
+    # ------------------------------------------------------------------ #
     # maxGraph edge-title write-back
     # ------------------------------------------------------------------ #
     def update_maxgraph_edge_title(
@@ -972,6 +1073,87 @@ class WritebackService:
             lambda block_text: self._replace_maxgraph_block(xml),
         )
         return MaxGraphBlockRestoreResult(relative_path, line, index)
+
+    def _locate_maxgraph_block(self, path: str, line: int, index: int):
+        """Resolve ``path`` and locate the maxGraph block anchored at ``line`` with occurrence
+        ``index``, returning ``(md_path, lines, content_start, content_end)`` where ``lines``
+        keeps terminators and the bounds cover the block body between the fences."""
+        md_path = self._resolve_markdown_path(path)
+        if not md_path.exists() or not md_path.is_file():
+            raise FileNotFoundError(self._markdown_file_not_found_message(md_path))
+        if line < 1:
+            raise ValueError("maxGraph block line must be 1 or greater")
+        if index < 0:
+            raise ValueError("maxGraph block index must be 0 or greater")
+
+        lines = md_path.read_text(encoding="utf-8").splitlines(keepends=True)
+        if line > len(lines):
+            raise ValueError("maxGraph block line is outside the markdown file")
+
+        text_lines = [self._line_text(single_line) for single_line in lines]
+        for block_index, anchor_line, content_start, content_end in (
+            self._iter_maxgraph_blocks(text_lines)
+        ):
+            if block_index != index or anchor_line != line:
+                continue
+            return md_path, lines, content_start, content_end
+
+        raise ValueError("maxGraph block not found at the requested line and index")
+
+    def get_maxgraph_block_source(
+        self, path: str, line: int, index: int
+    ) -> MaxGraphBlockSourceResult:
+        """Read-only prefill for the maxGraph source-toggle editor: the block's current on-disk
+        body (an empty block yields an empty string — never the browser's in-memory
+        empty-canvas substitution). No write, no cache invalidation."""
+        md_path, lines, content_start, content_end = self._locate_maxgraph_block(
+            path, line, index
+        )
+        return MaxGraphBlockSourceResult(
+            self._to_relative(md_path),
+            line,
+            index,
+            "".join(lines[content_start:content_end]),
+        )
+
+    def update_maxgraph_block(
+        self, path: str, line: int, index: int, xml: str
+    ) -> MaxGraphBlockUpdateResult:
+        """Persist a maxGraph source-toggle editor save, replacing the block body with ``xml``.
+
+        Unlike ``restore_maxgraph_block`` (validated snapshot writes for delete-undo), this
+        interactive-edit path never validates the XML — render-gating is client-side, and a
+        broken block may save a still-invalid partial fix — and an empty body is a valid save
+        (the empty maxGraph canvas). The round-trip boundary guard re-scans the would-be file
+        and requires the same block (occurrence index, anchor) with content bounds exactly
+        covering the replacement, so a body line that would terminate the fence early is
+        rejected and nothing is written."""
+        md_path, lines, content_start, content_end = self._locate_maxgraph_block(
+            path, line, index
+        )
+        previous_block = "".join(lines[content_start:content_end])
+        new_lines = self._content_lines(xml, lines)
+        candidate = lines[:content_start] + new_lines + lines[content_end:]
+
+        candidate_text = [self._line_text(single_line) for single_line in candidate]
+        expected = (line, content_start, content_start + len(new_lines))
+        found = None
+        for block_index, new_anchor, new_start, new_end in (
+            self._iter_maxgraph_blocks(candidate_text)
+        ):
+            if block_index == index:
+                found = (new_anchor, new_start, new_end)
+                break
+        if found != expected:
+            raise ValueError(
+                "the edited source would change the maxGraph block's boundaries; nothing was saved"
+            )
+
+        md_path.write_text("".join(candidate), encoding="utf-8")
+        self._invalidate_render_cache(md_path)
+        return MaxGraphBlockUpdateResult(
+            self._to_relative(md_path), line, index, previous_block, "".join(new_lines)
+        )
 
     def _rewrite_maxgraph_block(self, path: str, line: int, index: int, rewrite) -> str:
         """Locate the maxGraph block at ``line``/``index``, apply ``rewrite`` to its text,

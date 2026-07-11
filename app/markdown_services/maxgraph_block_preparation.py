@@ -76,6 +76,31 @@ class MaxGraphBlockPreparation:
             index += 1
         return anchors
 
+    def _iter_maxgraph_blocks(self, lines: list[str]):
+        """Yield ``(block_index, anchor_line, content_start, content_end)`` for each maxGraph
+        fenced block in ``lines`` (text lines, no terminators): the 1-based opening-fence
+        anchor (the ``data-maxgraph-line`` identity) and the 0-based ``[content_start,
+        content_end)`` body bounds. The maxGraph analog of ``_iter_mermaid_blocks``, shared by
+        the source-toggle read/update write-backs and their round-trip boundary guard."""
+        block_index = 0
+        cursor = 0
+        while cursor < len(lines):
+            match = FENCED_CODE_START_RE.match(lines[cursor])
+            if not match:
+                cursor += 1
+                continue
+            closing_index = self._code_block_extractor._find_closing_fence(
+                lines, cursor + 1, match.group("fence")
+            )
+            if closing_index is None:
+                break
+            if not self._code_block_extractor._is_maxgraph_info(match.group("info")):
+                cursor = closing_index + 1
+                continue
+            yield block_index, cursor + 1, cursor + 1, closing_index
+            block_index += 1
+            cursor = closing_index + 1
+
     def _prepare_maxgraph_blocks(self, source: str, original_source: str | None = None) -> str:
         lines = source.splitlines()
         transformed: list[str] = []

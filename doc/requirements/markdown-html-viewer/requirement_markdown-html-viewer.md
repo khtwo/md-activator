@@ -135,7 +135,7 @@ Must:
 Should:
 - Render common markdown constructs including fenced code blocks and tables.
 - Render supported diagram blocks, including Mermaid and maxGraph-compatible `mxGraphModel` or draw.io `mxfile` XML fences.
-- Keep rendered tables within the markdown body content width; long table content must wrap instead of making the table wider than the body padding allows.
+- Keep rendered tables within the markdown body content width; cell text wraps at word boundaries, no column is squeezed below its longest unbreakable word by other columns' content, and a table too wide to fit scrolls horizontally inside the body instead of overflowing it.
 - Show clear errors when rendering fails.
 - Keep run instructions simple for local use.
 - Provide a Marketplace-ready VS Code extension package for desktop users.
@@ -214,8 +214,8 @@ Could:
    Validation: static browser asset test and manual browser smoke test when practical.
 28. Given timed auto refresh runs while the current markdown file has not changed, when `/api/render` receives a matching `ifRenderVersion`, then the response is `{"status": "no-change"}` and the browser skips re-rendering the markdown body.
    Validation: API regression test and static browser asset test.
-29. Given a rendered markdown table contains long cell content, when the page is displayed, then the table stays within the markdown body content width and wraps long cell text instead of extending beyond the body padding.
-   Validation: static browser asset test.
+29. Given a rendered markdown table contains long cell content, when the page is displayed, then cell text wraps at word boundaries (only a word wider than its column may break mid-word), no column is compressed below its longest unbreakable fragment by other columns' content, and a table whose minimum width exceeds the markdown body content width scrolls horizontally inside its viewer-owned scroll container instead of extending beyond the body padding.
+   Validation: static browser asset test and renderer regression test.
 30. Given a markdown file contains a fenced `maxgraph`, `mxgraph`, `maxgraphcolor`, or `maxgraphcolorall` block with `mxGraphModel` XML or draw.io `mxfile` XML containing an `mxGraphModel`, when it is rendered, then the output contains a read-only diagram container and the source XML is not shown as an editable code block. Given a normal-mode or color-mode maxGraph block has any source `rounded` value, then rectangle cells and orthogonal edge bends render rounded as if `rounded=1`. Given a color-mode `maxgraphcolor` block has style attributes, then `strokeColor`, `fontColor`, and `fontSize` affect the rendered diagram while `fillColor` is ignored. Given a color-all-mode `maxgraphcolorall` block has style attributes, then color-mode attributes plus `fillColor`, `labelBackgroundColor`, and explicit `rounded` affect the rendered diagram.
    Validation: renderer unit test and static browser asset test.
 31. Given a maxGraph XML edge style includes `edgeStyle=orthogonalEdgeStyle`, when the browser renders the diagram, then that edge is drawn with a right-angled SVG connector path while edges without that style remain straight. Given a straight or orthogonal maxGraph XML edge style includes `startArrow` or `endArrow`, when the browser renders the diagram, then source and target markers are controlled independently with supported values `none`, `classic`, `classicThin`, `block`, `blockThin`, `open`, `openThin`, `oval`, `diamond`, and `diamondThin`; `none` omits that side's marker, missing or unsupported `startArrow` keeps no source marker, and missing or unsupported `endArrow` keeps the default classic target marker.

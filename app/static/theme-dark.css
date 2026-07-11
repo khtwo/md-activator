@@ -133,7 +133,7 @@ body.body--dark .markdown-body tr:nth-child(even) {
   background: #20262e;
 }
 
-body.body--dark .markdown-body .markdown-table {
+body.body--dark .markdown-body .markdown-table-wrap {
   background: #1b2027;
   border-color: #3a4350;
   box-shadow: 0 12px 28px rgba(0, 0, 0, 0.22);

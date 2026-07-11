@@ -414,6 +414,14 @@ const createMaxGraphAddController = ({ getPath, history, loadFile, showError }) 
         }))
       });
     }
+    // Undo/redo of a source-toggle edit replays the body snapshot through the update endpoint
+    // (not block-restore, which validates the XML and rejects an empty body — source-edit
+    // snapshots may legitimately be empty or invalid). saveMaxGraphBlockUpdate lives in
+    // max-graph-source-toggle.js and is referenced at call time, like requireApiPayload.
+    if (edit.kind === 'maxgraph-source-edit') {
+      const { path, line, index, previousXml, xml } = edit;
+      return saveMaxGraphBlockUpdate({ path, line, index, xml: direction === 'undo' ? previousXml : xml });
+    }
     return null;
   };
 

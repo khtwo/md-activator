@@ -123,6 +123,11 @@ class DiagramPreprocessor:
         instance because the render pipeline calls it here."""
         return self._maxgraph_block_preparation._prepare_maxgraph_blocks(source, original_source)
 
+    def _iter_maxgraph_blocks(self, lines: list[str]):
+        """Forward to the maxGraph block-preparation collaborator. Preserved on this
+        instance because ``WritebackService`` calls it here (source-toggle read/update)."""
+        return self._maxgraph_block_preparation._iter_maxgraph_blocks(lines)
+
     # ------------------------------------------------------------------ #
     # maxGraph write-back rewrites (delegated to MaxGraphXmlRewriter)
     # ------------------------------------------------------------------ #

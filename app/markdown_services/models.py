@@ -3,6 +3,8 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
+import xml.etree.ElementTree as etree
+
 from markdown.extensions import Extension
 from markdown.treeprocessors import Treeprocessor
 
@@ -145,11 +147,22 @@ MAXGRAPH_INFO_LANGUAGES = (
 
 class MarkdownTableClassTreeprocessor(Treeprocessor):
     def run(self, root):
-        for table in root.iter("table"):
+        parents = {child: parent for parent in root.iter() for child in parent}
+        for table in list(root.iter("table")):
             classes = table.get("class", "").split()
             if "markdown-table" not in classes:
                 classes.append("markdown-table")
                 table.set("class", " ".join(classes))
+            parent = parents.get(table, root)
+            if parent.tag == "div" and "markdown-table-wrap" in parent.get("class", "").split():
+                continue
+            wrapper = etree.Element("div", {"class": "markdown-table-wrap"})
+            wrapper.tail = table.tail
+            table.tail = None
+            index = list(parent).index(table)
+            parent.remove(table)
+            wrapper.append(table)
+            parent.insert(index, wrapper)
         return root
 
 
@@ -322,6 +335,23 @@ class MaxGraphBlockRestoreResult:
     index: int
 
 
+@dataclass
+class MaxGraphBlockSourceResult:
+    relative_path: str
+    line: int
+    index: int
+    xml: str
+
+
+@dataclass
+class MaxGraphBlockUpdateResult:
+    relative_path: str
+    line: int
+    index: int
+    previous_xml: str
+    xml: str
+
+
 MERMAID_NODE_DIAGRAM_TYPES = ("flowchart", "er", "class", "state")
 
 
@@ -396,6 +426,24 @@ class MermaidBlockRestoreResult:
     relative_path: str
     line: int
     index: int
+
+
+@dataclass
+class MermaidBlockSourceResult:
+    relative_path: str
+    line: int
+    index: int
+    source: str
+    fenced: bool
+
+
+@dataclass
+class MermaidBlockUpdateResult:
+    relative_path: str
+    line: int
+    index: int
+    previous_source: str
+    source: str
 
 
 @dataclass

@@ -457,7 +457,7 @@ const bindMaxGraphCanvasZoomPan = (diagram, diagramIndex) => {
     shouldStartPan: (event) => !(
       event.target.closest
       && event.target.closest(
-        '.maxgraph-add-controls, .maxgraph-node, .maxgraph-node-title-editor, .maxgraph-edge-label, .maxgraph-edge-title-editor, .maxgraph-edge, .maxgraph-edge-hit'
+        '.maxgraph-add-controls, .maxgraph-node, .maxgraph-node-title-editor, .maxgraph-edge-label, .maxgraph-edge-title-editor, .maxgraph-edge, .maxgraph-edge-hit, .maxgraph-source-editor-wrap'
       )
     )
   });

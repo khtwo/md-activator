@@ -199,28 +199,31 @@ body {
   padding-left: 1.35rem;
 }
 
-.markdown-body .markdown-table {
+.markdown-body .markdown-table-wrap {
   background: #ffffff;
   border: 1px solid #d9e1ec;
-  border-collapse: separate;
   border-radius: 8px;
-  border-spacing: 0;
   box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
-  display: table;
   margin: 1rem 0 1.25rem;
   max-width: 100%;
   overflow-x: auto;
+  width: fit-content;
+}
+
+.markdown-body .markdown-table {
+  border-collapse: separate;
+  border-spacing: 0;
+  display: table;
   width: auto;
 }
 
 .markdown-body .markdown-table th,
 .markdown-body .markdown-table td {
   border-bottom: 1px solid #e5ebf3;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
   padding: 0.72rem 0.9rem;
   text-align: left;
   vertical-align: top;
-  word-break: break-word;
 }
 
 .markdown-body .markdown-table th {

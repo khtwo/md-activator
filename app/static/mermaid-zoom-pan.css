@@ -153,7 +153,8 @@ body.body--dark .markdown-body .mermaid g.node.mermaid-node-selected > :where(re
 
 .markdown-body .mermaid-add-button,
 .markdown-body .mermaid-add-edge-button,
-.markdown-body .mermaid-delete-button {
+.markdown-body .mermaid-delete-button,
+.markdown-body .mermaid-source-button {
   align-items: center;
   background: #ffffff;
   border: 1px solid #cbd5e1;
@@ -174,15 +175,24 @@ body.body--dark .markdown-body .mermaid g.node.mermaid-node-selected > :where(re
   font-size: 14px;
 }
 
+/* The `</>` source toggle: 3 glyphs, so it gets a fitted width instead of the square 28px. */
+.markdown-body .mermaid-source-button {
+  font-size: 12px;
+  width: auto;
+  padding: 0 6px;
+}
+
 .markdown-body .mermaid-add-button:hover,
 .markdown-body .mermaid-add-edge-button:hover,
-.markdown-body .mermaid-delete-button:hover {
+.markdown-body .mermaid-delete-button:hover,
+.markdown-body .mermaid-source-button:hover {
   background: #eef2f7;
 }
 
 body.body--dark .markdown-body .mermaid-add-button,
 body.body--dark .markdown-body .mermaid-add-edge-button,
-body.body--dark .markdown-body .mermaid-delete-button {
+body.body--dark .markdown-body .mermaid-delete-button,
+body.body--dark .markdown-body .mermaid-source-button {
   background: #1f2733;
   border-color: #3a4452;
   color: #e8edf4;
@@ -190,7 +200,8 @@ body.body--dark .markdown-body .mermaid-delete-button {
 
 body.body--dark .markdown-body .mermaid-add-button:hover,
 body.body--dark .markdown-body .mermaid-add-edge-button:hover,
-body.body--dark .markdown-body .mermaid-delete-button:hover {
+body.body--dark .markdown-body .mermaid-delete-button:hover,
+body.body--dark .markdown-body .mermaid-source-button:hover {
   background: #2a3340;
 }
 
@@ -271,6 +282,131 @@ body.body--dark .markdown-body .mermaid-repair-box {
 }
 
 body.body--dark .markdown-body .mermaid-repair-box.mermaid-repair-unfixable {
+  background: #2a1414;
+  border-color: #b91c1c;
+  color: #f7b4b4;
+}
+
+/* --- Mermaid source toggle (`</>`), change package 2026-07-11-mermaid-source-toggle --------- */
+
+/* Text mode hides the rendered canvas and the svg-targeting toolbar buttons; only `</>` stays. */
+.markdown-body .mermaid.mermaid-source-editing > .mermaid-viewport {
+  display: none;
+}
+
+.markdown-body .mermaid-source-editing .mermaid-add-button,
+.markdown-body .mermaid-source-editing .mermaid-add-edge-button,
+.markdown-body .mermaid-source-editing .mermaid-delete-button {
+  display: none;
+}
+
+/* A broken block's container is normally display:none; the source editor needs it visible. */
+.markdown-body .mermaid-unrendered.mermaid-source-editing {
+  display: block;
+  position: relative;
+}
+
+.markdown-body .mermaid-source-editor {
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  box-sizing: border-box;
+  color: #1f2937;
+  display: block;
+  font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  min-height: 120px;
+  overflow: auto;
+  padding: 8px 44px 8px 10px; /* right padding keeps text clear of the overlaid toolbar */
+  resize: vertical;
+  white-space: pre;
+  width: 100%;
+}
+
+.markdown-body .mermaid-source-editor:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.18);
+  outline: none;
+}
+
+/* Changed-on-disk conflict notice (informational, dismissible; never blocks anything). */
+.markdown-body .mermaid-source-notice {
+  align-items: baseline;
+  background: #fffbeb;
+  border: 1px solid #f59e0b;
+  border-radius: 6px;
+  color: #78350f;
+  display: flex;
+  font: 13px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  gap: 8px;
+  justify-content: space-between;
+  margin-top: 6px;
+  padding: 6px 10px;
+}
+
+.markdown-body .mermaid-source-notice-dismiss {
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  font-size: 15px;
+  line-height: 1;
+  padding: 0 2px;
+}
+
+/* Parse-gate failure: the reason plus the one deliberate way out of an invalid edit. */
+.markdown-body .mermaid-source-error {
+  align-items: baseline;
+  background: #fef2f2;
+  border: 1px solid #ef4444;
+  border-radius: 6px;
+  color: #7f1d1d;
+  display: flex;
+  font: 13px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  gap: 8px;
+  justify-content: space-between;
+  margin-top: 6px;
+  padding: 6px 10px;
+}
+
+.markdown-body .mermaid-source-error[hidden] {
+  display: none;
+}
+
+.markdown-body .mermaid-source-discard,
+.markdown-body .mermaid-repair-edit-source {
+  background: #2563eb;
+  border: none;
+  border-radius: 4px;
+  color: #ffffff;
+  cursor: pointer;
+  flex-shrink: 0;
+  font: 600 13px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  padding: 4px 12px;
+}
+
+.markdown-body .mermaid-source-discard:hover,
+.markdown-body .mermaid-repair-edit-source:hover {
+  background: #1d4ed8;
+}
+
+/* The unfixable box already ends with an issue list; give its Edit source entry breathing room. */
+.markdown-body .mermaid-repair-edit-source {
+  margin-top: 2px;
+}
+
+body.body--dark .markdown-body .mermaid-source-editor {
+  background: #111827;
+  border-color: #3a4452;
+  color: #e8edf4;
+}
+
+body.body--dark .markdown-body .mermaid-source-notice {
+  background: #2a2410;
+  border-color: #b97e0a;
+  color: #fcd9a3;
+}
+
+body.body--dark .markdown-body .mermaid-source-error {
   background: #2a1414;
   border-color: #b91c1c;
   color: #f7b4b4;

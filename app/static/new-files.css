@@ -4,10 +4,13 @@
   position: relative;
 }
 
-/* Dropdown panel: width-capped so long filenames wrap rather than stretch it. */
+/* Dropdown panel: width-capped so long filenames wrap rather than stretch it. Height may use up
+   to 90% of the viewport instead of Quasar's .q-menu 65vh cap (same specificity as .q-menu — this
+   sheet loading after quasar.prod.css wins). */
 .viewer-new-files-menu {
   width: 320px;
   max-width: 90vw;
+  max-height: 90vh;
 }
 
 .viewer-new-files-header {

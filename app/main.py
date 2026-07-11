@@ -70,12 +70,14 @@ LOCAL_STATIC_FILES = (
     "max-graph-interactions.js",
     "max-graph-selection.js",
     "max-graph.js",
+    "max-graph-source-toggle.js",
     "mermaid-zoom-pan.js",
     "mermaid-title-edit.js",
     "mermaid-selection.js",
     "mermaid-add.js",
     "app-support.js",
     "mermaid-repair.js",
+    "mermaid-source-toggle.js",
     "search.js",
     "yaml-view.js",
     "json-view.js",
@@ -405,6 +407,13 @@ class MaxGraphBlockRestoreRequest(BaseModel):
     xml: str
 
 
+class MaxGraphBlockUpdateRequest(BaseModel):
+    path: str
+    line: int
+    index: int
+    xml: str
+
+
 class MermaidNodeTitleUpdateRequest(BaseModel):
     path: str
     line: int
@@ -462,6 +471,13 @@ class MermaidEdgeDeleteRequest(BaseModel):
 
 
 class MermaidBlockRestoreRequest(BaseModel):
+    path: str
+    line: int
+    index: int
+    source: str
+
+
+class MermaidBlockUpdateRequest(BaseModel):
     path: str
     line: int
     index: int
@@ -893,6 +909,48 @@ def restore_maxgraph_block(payload: MaxGraphBlockRestoreRequest) -> dict:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+@app.get("/api/maxgraph-block-source")
+def get_maxgraph_block_source(path: str, line: int, index: int) -> dict:
+    # Read-only prefill for the source-toggle editor; no write, no cache side effects, so the
+    # permission (403) branch never applies here.
+    try:
+        result = renderer.get_maxgraph_block_source(path=path, line=line, index=index)
+        return {
+            "path": result.relative_path,
+            "line": result.line,
+            "index": result.index,
+            "xml": result.xml,
+        }
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/maxgraph-block-update")
+def update_maxgraph_block(payload: MaxGraphBlockUpdateRequest) -> dict:
+    try:
+        result = renderer.update_maxgraph_block(
+            path=payload.path,
+            line=payload.line,
+            index=payload.index,
+            xml=payload.xml,
+        )
+        return {
+            "path": result.relative_path,
+            "line": result.line,
+            "index": result.index,
+            "previousXml": result.previous_xml,
+            "xml": result.xml,
+        }
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=SAVE_PERMISSION_ERROR_DETAIL) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @app.post("/api/mermaid-node-title")
 def update_mermaid_node_title(payload: MermaidNodeTitleUpdateRequest) -> dict:
     try:
@@ -1076,6 +1134,49 @@ def restore_mermaid_block(payload: MermaidBlockRestoreRequest) -> dict:
             "path": result.relative_path,
             "line": result.line,
             "index": result.index,
+        }
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=SAVE_PERMISSION_ERROR_DETAIL) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/api/mermaid-block-source")
+def get_mermaid_block_source(path: str, line: int, index: int) -> dict:
+    # Read-only prefill for the source-toggle editor; no write, no cache side effects, so the
+    # permission (403) branch never applies here.
+    try:
+        result = renderer.get_mermaid_block_source(path=path, line=line, index=index)
+        return {
+            "path": result.relative_path,
+            "line": result.line,
+            "index": result.index,
+            "source": result.source,
+            "fenced": result.fenced,
+        }
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/mermaid-block-update")
+def update_mermaid_block(payload: MermaidBlockUpdateRequest) -> dict:
+    try:
+        result = renderer.update_mermaid_block(
+            path=payload.path,
+            line=payload.line,
+            index=payload.index,
+            source=payload.source,
+        )
+        return {
+            "path": result.relative_path,
+            "line": result.line,
+            "index": result.index,
+            "previousSource": result.previous_source,
+            "source": result.source,
         }
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc

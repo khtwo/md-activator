@@ -88,7 +88,7 @@ const bindMermaidDiagramAddControlsForDiagram = (diagram, controller) => {
   addEdgeButton.textContent = '→';
 
   // Delete button: the trash icon deletes the current node selection (cascading its edges), or — with
-  // no selection — enters edge-delete pick mode.
+  // no selection — enters delete-pick mode (a click deletes the picked node or edge).
   const deleteButton = document.createElement('button');
   deleteButton.type = 'button';
   deleteButton.className = 'mermaid-delete-button';
@@ -152,10 +152,12 @@ const bindMermaidDiagramAddControlsForDiagram = (diagram, controller) => {
     };
   };
 
-  // Delete-pick mode (no selection): a capturing pointerdown on the svg deletes the clicked edge
-  // (located by its `data-mermaid-edge` identity tag, set by the title editor); clicking a node or
-  // empty background, Escape, or re-clicking the trash button cancels. The diagram carries
-  // `mermaid-deleting` while active, which makes the selection modifiers inert.
+  // Delete-pick mode (no selection): a capturing pointerdown on the svg deletes the clicked node
+  // (with its cascaded incident edges, via the batch endpoint — change package
+  // 2026-07-11-mermaid-delete-pick-node) or the clicked edge (located by its `data-mermaid-edge`
+  // identity tag, set by the title editor); clicking empty background, Escape, or re-clicking the
+  // trash button cancels. The diagram carries `mermaid-deleting` while active, which makes the
+  // selection modifiers inert.
   const startDeletePick = () => {
     cancelEdgePick();
     cancelDeletePick();
@@ -163,9 +165,18 @@ const bindMermaidDiagramAddControlsForDiagram = (diagram, controller) => {
 
     const onPointerDownCapture = (event) => {
       event.stopPropagation();
+      const nodeElement = event.target.closest
+        && event.target.closest('g.node.mermaid-node-selectable');
+      if (nodeElement) {
+        event.preventDefault();
+        const nodeId = nodeElement.dataset.mermaidSourceId;
+        cancelDeletePick();
+        if (nodeId) controller.deleteNodes({ diagram, diagramType, nodeIds: [nodeId] });
+        return;
+      }
       const edgeElement = event.target.closest && event.target.closest('[data-mermaid-edge]');
       if (!edgeElement) {
-        cancelDeletePick(); // clicked a node or empty background
+        cancelDeletePick(); // clicked empty background or a non-selectable pseudo-state
         return;
       }
       event.preventDefault();
@@ -209,7 +220,7 @@ const bindMermaidDiagramAddControlsForDiagram = (diagram, controller) => {
   });
 
   // The Delete button: with one or more nodes selected, batch-delete them (and their cascaded
-  // edges); otherwise toggle edge-delete pick mode.
+  // edges); otherwise toggle delete-pick mode.
   deleteButton.addEventListener('click', (event) => {
     event.stopPropagation();
     cancelEdgePick();
@@ -244,7 +255,7 @@ const createMermaidAddController = ({ getPath, history, loadFile, showError }) =
 
   // Every structural edit (add / delete) is reversed by restoring a captured block-source snapshot,
   // not by replaying the inverse op — mermaid edges have no stable id.
-  const SNAPSHOT_EDIT_KINDS = ['mermaid-node-add', 'mermaid-edge-add', 'mermaid-nodes-delete', 'mermaid-edge-delete'];
+  const SNAPSHOT_EDIT_KINDS = ['mermaid-node-add', 'mermaid-edge-add', 'mermaid-nodes-delete', 'mermaid-edge-delete', 'mermaid-source-edit'];
 
   const persist = async (ref, kind, save, body) => {
     try {

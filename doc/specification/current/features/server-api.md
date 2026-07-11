@@ -33,7 +33,7 @@ _[← Application Features index](../application-features.md)._ Server lifecycle
 - Expired folder metadata is rebuilt with a single markdown-descendant scan for the current dropdown root rather than repeated descendant scans per visible folder.
 - Folder metadata cache cleanup runs from the backend app timer and removes expired entries.
 - The folder metadata cache stores at most 100 folder entries. When full, it evicts the oldest last-accessed folder metadata entry.
-- Every successful write-back operation — checkbox, code-block, maxGraph node position, maxGraph multi-node group move, maxGraph node title, maxGraph edge title, maxGraph node add/delete, maxGraph edge add/delete, mermaid node title, mermaid edge title, and mermaid repair — invalidates the affected file's cached render entry.
+- Every successful write-back operation — checkbox, code-block, maxGraph node position, maxGraph multi-node group move, maxGraph node title, maxGraph edge title, maxGraph node add/delete, maxGraph edge add/delete, maxGraph block update, mermaid node title, mermaid edge title, mermaid block update, and mermaid repair — invalidates the affected file's cached render entry. (`GET /api/mermaid-block-source` and `GET /api/maxgraph-block-source` are read-only and have no cache side effects.)
 
 ## Markdown Render API
 Endpoint: `GET /api/render`
@@ -251,6 +251,26 @@ Successful response: `{ "path": "diagram.md", "line": 10, "index": 0 }`
 
 Errors: same `400`/`403`/`404` model as `POST /api/maxgraph-node` (the `400` also covers empty `xml` or XML that is not a maxGraph model).
 
+Endpoint: `GET /api/maxgraph-block-source`
+
+Returns a maxGraph block's current on-disk body (used by the source-toggle editor's prefill; change package `2026-07-11-maxgraph-source-toggle`). Read-only: no write, no cache side effects. The prefill is disk truth, so an empty block yields an empty `xml` (never the browser's in-memory empty-canvas substitution). No `fenced` field — maxGraph blocks are fenced-only.
+
+Query parameters: `path` (relative `.md` path), `line` (block anchor line), `index` (block occurrence index) — the same block identity carried by `data-maxgraph-line`/`data-maxgraph-index`.
+
+Successful response: `{ "path": "diagram.md", "line": 10, "index": 0, "xml": "<block body>" }`
+
+Errors: `400` (path escapes the content root, target is not a `.md` file, line/index is invalid, or the block cannot be located), `404` (target markdown file does not exist). No `403`: the endpoint never writes.
+
+Endpoint: `POST /api/maxgraph-block-update`
+
+Persists a maxGraph source-toggle editor save, replacing the block body with `xml` verbatim. Unlike `POST /api/maxgraph-block-restore` it performs **no XML validation** — render-gating is client-side, and a block whose XML is already broken may save a still-invalid partial fix — and an **empty body is a valid save** (the empty maxGraph canvas). The server applies a **round-trip boundary guard**: re-scanning the would-be file must find the same maxGraph block (same occurrence index and opening-fence anchor) whose content bounds exactly cover the replacement, so a body line that would terminate the fence early is rejected with `400` and nothing is written. Invalidates the file's cached render entry. The `previousXml`/`xml` snapshot pair feeds the shared undo history; `maxgraph-source-edit` undo/redo replays through this endpoint (not `maxgraph-block-restore`, which keeps validating and keeps rejecting an empty body).
+
+Request body: `{ "path": "diagram.md", "line": 10, "index": 0, "xml": "<new block body>" }`
+
+Successful response: `{ "path": "diagram.md", "line": 10, "index": 0, "previousXml": "<body before>", "xml": "<body after>" }`
+
+Errors: same `400`/`403`/`404` model as `POST /api/maxgraph-node` (the `400` also covers the boundary guard).
+
 Endpoint: `POST /api/mermaid-node-title`
 
 Persists an inline Mermaid entity-box title edit.
@@ -301,9 +321,29 @@ Successful response: `{ "path": "diagram.md", "line": 10, "index": 0 }`
 
 Errors: same `400`/`403`/`404` model as `POST /api/maxgraph-node`.
 
+Endpoint: `GET /api/mermaid-block-source`
+
+Returns a Mermaid block's current on-disk body (used by the source-toggle editor's prefill; change package `2026-07-11-mermaid-source-toggle`). Read-only: no write, no cache side effects. `fenced` distinguishes fenced from raw blocks so the editor can apply the empty-body rules client-side.
+
+Query parameters: `path` (relative `.md` path), `line` (block anchor line), `index` (block occurrence index) — the same block identity carried by `data-mermaid-line`/`data-mermaid-index`, covering fenced and raw blocks.
+
+Successful response: `{ "path": "diagram.md", "line": 10, "index": 0, "source": "<block body>", "fenced": true }`
+
+Errors: `400` (path escapes the content root, target is not a `.md` file, line/index is invalid, or the block cannot be located), `404` (target markdown file does not exist). No `403`: the endpoint never writes.
+
+Endpoint: `POST /api/mermaid-block-update`
+
+Persists a source-toggle editor save, replacing the block body with caller-supplied text. Unlike `mermaid-block-restore` (verbatim snapshot writes for undo/redo), this interactive-edit endpoint guards the write: a **raw** block's new first line must still match the raw-declaration recognizer (an emptied raw block is likewise rejected), and a **round-trip boundary guard** re-scans the would-be file and requires the same block (same occurrence index, fenced/raw kind, and anchor) with content bounds exactly covering the replacement — text that would terminate the fence early (a line stripping to ``` ``` ``` / `~~~`), extend a raw block into following content, or otherwise shift block boundaries is a `400` and nothing is written. An empty (or whitespace-only) `source` on a **fenced** block is accepted and yields the empty-canvas body. The response's `previousSource`/`source` snapshot pair feeds the shared undo history (kind `mermaid-source-edit`, replayed through `mermaid-block-restore`).
+
+Request body: `{ "path": "diagram.md", "line": 10, "index": 0, "source": "<new block body>" }`
+
+Successful response: `{ "path": "diagram.md", "line": 10, "index": 0, "previousSource": "<body before>", "source": "<body after>" }`
+
+Errors: same `400`/`403`/`404` model as `POST /api/maxgraph-node` (the `400` also covers the raw-declaration and boundary guards).
+
 Endpoint: `POST /api/mermaid-nodes-delete`
 
-Deletes one or more nodes from a Mermaid block and **cascades** the removal of their incident edges, in one write. A node id removes every content source line that names it as a whole token outside label/quoted regions (its declaration, `style`/`class` lines, and edge lines), and an entity/class/composite-state line that opens a `{ … }` body is removed through its matching `}`. The diagram-type declaration line is never removed. A **class** deletion that leaves nothing but the header appends an indented `direction TB` line, because the bundled mermaid cannot parse a bare `classDiagram` header — the persisted block must stay renderable (change package `2026-07-10-mermaid-empty-canvas`, addendum); the other node-bearing headers are valid alone and stay bare. (Limitations, recoverable via undo: a line naming multiple nodes — an `A --> B --> C` chain or `A & B --> C` — is removed wholesale, and a node existing only as an edge endpoint disappears with that edge.) Used by the Delete button when one or more nodes are selected (single delete = select one node).
+Deletes one or more nodes from a Mermaid block and **cascades** the removal of their incident edges, in one write. A node id removes every content source line that names it as a whole token outside label/quoted regions (its declaration, `style`/`class` lines, and edge lines), and an entity/class/composite-state line that opens a `{ … }` body is removed through its matching `}`. The diagram-type declaration line is never removed. A **class** deletion that leaves nothing but the header appends an indented `direction TB` line, because the bundled mermaid cannot parse a bare `classDiagram` header — the persisted block must stay renderable (change package `2026-07-10-mermaid-empty-canvas`, addendum); the other node-bearing headers are valid alone and stay bare. (Limitations, recoverable via undo: a line naming multiple nodes — an `A --> B --> C` chain or `A & B --> C` — is removed wholesale, and a node existing only as an edge endpoint disappears with that edge.) Used by the Delete button when one or more nodes are selected, and by delete-pick mode for a clicked node (`nodeIds` of length 1; change package `2026-07-11-mermaid-delete-pick-node`).
 
 Request body: `{ "path": "diagram.md", "line": 10, "index": 0, "diagramType": "flowchart", "nodeIds": ["A", "B"] }`. `diagramType` must be one of `flowchart`, `er`, `class`, or `state`; `nodeIds` must be non-empty.
 
@@ -313,7 +353,7 @@ Errors: same `400`/`403`/`404` model as `POST /api/maxgraph-node` (the `400` als
 
 Endpoint: `POST /api/mermaid-edge-delete`
 
-Deletes a single edge, located by the **same per-type identity the edge-title editor uses**: flowchart by `(source, target, occurrence)`, er/class/state by relationship/transition ordinal (`edgeIndex`). Its source line is removed. The complex links the edge-title editor refuses (flowchart `&` / chains / unparseable operators, state self-loops) are likewise non-deletable (`400`). Used by the Delete button when no node is selected (delete-pick mode).
+Deletes a single edge, located by the **same per-type identity the edge-title editor uses**: flowchart by `(source, target, occurrence)`, er/class/state by relationship/transition ordinal (`edgeIndex`). Its source line is removed. The complex links the edge-title editor refuses (flowchart `&` / chains / unparseable operators, state self-loops) are likewise non-deletable (`400`). Used by delete-pick mode when an edge is clicked (a clicked node goes through `POST /api/mermaid-nodes-delete` instead).
 
 Request body: `{ "path": "diagram.md", "line": 10, "index": 0, "diagramType": "flowchart", "source": "A", "target": "B", "occurrence": 0, "edgeIndex": 0 }`.
 

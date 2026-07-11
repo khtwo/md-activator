@@ -1,6 +1,13 @@
 /* File/folder dropdown option styling, split out of style.css to keep runtime assets under the
    per-file line cap. Covers the option row, its type icon, and the collapse/expand toggle. */
 
+/* The popup otherwise inherits Quasar's .q-menu 65vh cap; let the file tree use up to 90% of the
+   viewport (same specificity as .q-menu — this sheet loading after quasar.prod.css wins). Quasar's
+   menu positioning still shrinks the open popup when less space is actually available. */
+.viewer-file-popup {
+  max-height: 90vh;
+}
+
 .viewer-file-option {
   min-height: 36px;
   /* Indentation is carried by the leading toggle section so the empty band left of the chevron is a
