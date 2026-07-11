@@ -800,8 +800,8 @@ class WritebackService:
     def restore_mermaid_block(
         self, path: str, line: int, index: int, source: str
     ) -> MermaidBlockRestoreResult:
-        if not source or not source.strip():
-            raise ValueError("mermaid block source is required")
+        # An empty `source` is legitimate: undoing the first add on an empty block restores the
+        # block to an empty body, which renders as the empty canvas (2026-07-10 empty-canvas rule).
         relative_path, _previous, _new = self._rewrite_mermaid_block(
             path, line, index, lambda block_text: source
         )

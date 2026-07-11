@@ -272,7 +272,7 @@ Errors: same `400`/`403`/`404` model as `POST /api/maxgraph-node` (the `400` als
 
 Endpoint: `POST /api/mermaid-node-add`
 
-Appends a new isolated node titled "New" to a Mermaid block and re-renders. The node id is **server-generated** and unique within the block (smallest unused `New_<n>`), because the client only sees rendered node ids (which can miss an id present in source but not rendered). Per-type synthesis: `<id>["New"]` for flowchart/erDiagram, `class <id>["New"]` for classDiagram, and a `<id> : New` description line for stateDiagram.
+Appends a new isolated node titled "New" to a Mermaid block and re-renders. The node id is **server-generated** and unique within the block (smallest unused `New_<n>`), because the client only sees rendered node ids (which can miss an id present in source but not rendered). Per-type synthesis: `<id>["New"]` for flowchart/erDiagram, `class <id>["New"]` for classDiagram, and a `<id> : New` description line for stateDiagram. When the block body is **empty or whitespace only**, the diagram-type header is scaffolded ahead of the node line (`flowchart TD`, `erDiagram`, `classDiagram`, or `stateDiagram-v2`) so the block becomes a valid diagram — the mermaid analog of the maxGraph empty-block scaffold (change package `2026-07-10-mermaid-empty-canvas`).
 
 Request body: `{ "path": "diagram.md", "line": 10, "index": 0, "diagramType": "flowchart" }`. `diagramType` must be one of `flowchart`, `er`, `class`, or `state`.
 
@@ -288,21 +288,21 @@ Request body: `{ "path": "diagram.md", "line": 10, "index": 0, "diagramType": "f
 
 Successful response: echoes `path`, `line`, `index`, `diagramType`, `sourceId`, `targetId`, plus `previousSource` and `source` snapshots.
 
-Errors: same `400`/`403`/`404` model as `POST /api/maxgraph-node` (the `400` also covers an unsupported `diagramType`, an empty endpoint, or a self-loop).
+Errors: same `400`/`403`/`404` model as `POST /api/maxgraph-node` (the `400` also covers an unsupported `diagramType`, an empty endpoint, a self-loop, or an **empty/whitespace-only block body** — an empty block has no nodes to connect, so the first element must be a node).
 
 Endpoint: `POST /api/mermaid-block-restore`
 
 Replaces a Mermaid block's entire content with a caller-supplied source snapshot. Used to undo/redo a mermaid add **or delete**: the browser captures the block's before/after source from the add/delete response and writes the appropriate one back here on Ctrl+Z (before-source) / Ctrl+Y (after-source). Because mermaid edges have no stable id, this snapshot restore — not a delete-by-id — is how mermaid structural edits are reversed.
 
-Request body: `{ "path": "diagram.md", "line": 10, "index": 0, "source": "<block source>" }`. `source` must be non-blank.
+Request body: `{ "path": "diagram.md", "line": 10, "index": 0, "source": "<block source>" }`. An **empty (or whitespace-only) `source` is accepted** and restores the block to an empty body, which renders as the empty mermaid canvas — undoing the first add on an empty block depends on it (change package `2026-07-10-mermaid-empty-canvas`; previously a blank `source` was rejected).
 
 Successful response: `{ "path": "diagram.md", "line": 10, "index": 0 }`
 
-Errors: same `400`/`403`/`404` model as `POST /api/maxgraph-node` (the `400` also covers a blank `source`).
+Errors: same `400`/`403`/`404` model as `POST /api/maxgraph-node`.
 
 Endpoint: `POST /api/mermaid-nodes-delete`
 
-Deletes one or more nodes from a Mermaid block and **cascades** the removal of their incident edges, in one write. A node id removes every content source line that names it as a whole token outside label/quoted regions (its declaration, `style`/`class` lines, and edge lines), and an entity/class/composite-state line that opens a `{ … }` body is removed through its matching `}`. The diagram-type declaration line is never removed. (Limitations, recoverable via undo: a line naming multiple nodes — an `A --> B --> C` chain or `A & B --> C` — is removed wholesale, and a node existing only as an edge endpoint disappears with that edge.) Used by the Delete button when one or more nodes are selected (single delete = select one node).
+Deletes one or more nodes from a Mermaid block and **cascades** the removal of their incident edges, in one write. A node id removes every content source line that names it as a whole token outside label/quoted regions (its declaration, `style`/`class` lines, and edge lines), and an entity/class/composite-state line that opens a `{ … }` body is removed through its matching `}`. The diagram-type declaration line is never removed. A **class** deletion that leaves nothing but the header appends an indented `direction TB` line, because the bundled mermaid cannot parse a bare `classDiagram` header — the persisted block must stay renderable (change package `2026-07-10-mermaid-empty-canvas`, addendum); the other node-bearing headers are valid alone and stay bare. (Limitations, recoverable via undo: a line naming multiple nodes — an `A --> B --> C` chain or `A & B --> C` — is removed wholesale, and a node existing only as an edge endpoint disappears with that edge.) Used by the Delete button when one or more nodes are selected (single delete = select one node).
 
 Request body: `{ "path": "diagram.md", "line": 10, "index": 0, "diagramType": "flowchart", "nodeIds": ["A", "B"] }`. `diagramType` must be one of `flowchart`, `er`, `class`, or `state`; `nodeIds` must be non-empty.
 

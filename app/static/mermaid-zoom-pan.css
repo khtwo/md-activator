@@ -83,6 +83,13 @@ body.body--dark .markdown-body .mermaid-edge-title-editor {
   display: none;
 }
 
+/* An empty block rendered as an empty canvas (a bare in-memory 'flowchart TD' header) produces a
+   ~16px svg; give the canvas a finite default size so it stays a visible, pannable frame with a
+   reachable toolbar — the mermaid analog of the maxGraph empty canvas's default-sized SVG. */
+.markdown-body .mermaid.mermaid-empty-canvas .mermaid-viewport {
+  min-height: 120px;
+}
+
 /* Node multi-selection (mirrors the maxGraph selection affordance). While a selection modifier
    (Shift marquee or Ctrl/Cmd toggle) is held the canvas shows a crosshair across the whole canvas.
    The crosshair is set on the inner `.mermaid-viewport` (the element that owns `cursor: grab`), not

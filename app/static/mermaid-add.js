@@ -35,11 +35,36 @@ const saveMermaidRestoreBlock = ({ path, line, index, source }) =>
   postMermaidMutation('/api/mermaid-block-restore', { path, line, index, source }, 'Failed to restore mermaid diagram');
 
 // --- toolbar binding ----------------------------------------------------------------------------
+// A zero-node canvas — an empty block substituted with a bare header, or a diagram whose nodes
+// were all deleted (the delete rewriter keeps the diagram-type declaration line) — has no node
+// ids to recover the diagram type from, so fall back to the grammar name mermaid stamps on the
+// rendered svg's aria-roledescription. Only the node-bearing types map (values pinned to bundled
+// mermaid 11.15.0; 'flowchart-v2' covers both flowchart and graph headers); pie/sequence/gantt
+// svgs match no entry and stay toolbar-less. A canvas that still has nodes never falls back: an
+// unparseable-node canvas keeps its existing no-toolbar behavior.
+const MERMAID_ARIA_DIAGRAM_TYPES = {
+  'flowchart-v2': 'flowchart',
+  er: 'er',
+  class: 'class',
+  stateDiagram: 'state'
+};
+
+const getMermaidZeroNodeDiagramType = (svg) => {
+  if (svg.querySelector('g.node')) return null;
+  const role = svg.getAttribute('aria-roledescription');
+  return (role && MERMAID_ARIA_DIAGRAM_TYPES[role]) || null;
+};
+
 const bindMermaidDiagramAddControlsForDiagram = (diagram, controller) => {
   if (diagram.__mermaidAddControls) return;
   const svg = diagram.querySelector('svg');
   if (!svg) return;
-  const diagramType = getMermaidDiagramType(svg, svg.getAttribute('id'));
+  let diagramType = getMermaidDiagramType(svg, svg.getAttribute('id'));
+  if (!diagramType) {
+    diagramType = getMermaidZeroNodeDiagramType(svg);
+    // The ~16px zero-node svg needs the empty-canvas min-height to stay a visible, usable frame.
+    if (diagramType) diagram.classList.add('mermaid-empty-canvas');
+  }
   if (!diagramType) return; // unsupported diagram type → no toolbar
   diagram.__mermaidAddControls = true;
 

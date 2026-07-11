@@ -57,6 +57,27 @@ const prepareMermaidRepairs = async () => {
     .filter((diagram) => !isRenderedMermaidDiagram(diagram));
   for (const diagram of diagrams) {
     const source = readMermaidSource(diagram);
+    if (!source) {
+      // An empty (or whitespace-only) block is an empty sketch canvas, not a parse error: render
+      // the bare flowchart header in memory (the file is never touched — same contract as the
+      // in-memory auto-repair) and tag the container so the add-controls pass can offer the first
+      // Add Node with the matching 'flowchart' type. Persisting that first node scaffolds the same
+      // header into the source block server-side.
+      diagram.textContent = 'flowchart TD';
+      diagram.classList.add('mermaid-empty-canvas');
+      diagram.dataset.mermaidEmptyCanvas = 'true';
+      continue;
+    }
+    if (source === 'classDiagram') {
+      // Bare `classDiagram` is the one node-bearing header bundled mermaid 11.15.0 cannot parse
+      // alone (flowchart/er/state header-only blocks are valid), so a hand-authored or legacy
+      // node-less class block gets the same in-memory empty-canvas treatment, rendered with the
+      // default direction line — the minimal form that parses. The app itself no longer writes
+      // the bare header: deleting the last class node persists this same direction-line form.
+      diagram.textContent = 'classDiagram\ndirection TB';
+      diagram.classList.add('mermaid-empty-canvas');
+      continue;
+    }
     let parseError = null;
     try {
       await mermaid.parse(source);

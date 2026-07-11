@@ -62,6 +62,16 @@ _MERMAID_RELATION_RE_BY_TYPE = {
 # the same set the title rewriters edit. Other types (sequence, gantt, pie, ...) are unsupported.
 MERMAID_STRUCTURE_DIAGRAM_TYPES = ("flowchart", "er", "class", "state")
 
+# Header line scaffolded when the first node is added to an empty (or whitespace-only) block —
+# the mermaid analog of the maxGraph empty-block `mxGraphModel` scaffold. The browser's empty-canvas
+# preview substitutes the same `flowchart TD` header, so preview and first-persisted state agree.
+_MERMAID_HEADER_BY_TYPE = {
+    "flowchart": "flowchart TD",
+    "er": "erDiagram",
+    "class": "classDiagram",
+    "state": "stateDiagram-v2",
+}
+
 
 class MermaidStructureRewriter:
     """Mermaid add-node / add-edge source synthesis as a collaborator.
@@ -106,7 +116,12 @@ class MermaidStructureRewriter:
             raise ValueError(f"Unsupported mermaid diagram type: {diagram_type!r}")
         if not node_id:
             raise ValueError("mermaid node id is required")
-        return self._append_block_line(block_text, self._node_declaration(diagram_type, node_id, title))
+        declaration = self._node_declaration(diagram_type, node_id, title)
+        if not block_text.strip():
+            # First node on an empty block: scaffold the diagram-type header so the block becomes
+            # a valid diagram (the empty-canvas rule; mirrors the maxGraph empty-block scaffold).
+            return f"{_MERMAID_HEADER_BY_TYPE[diagram_type]}\n  {declaration}\n"
+        return self._append_block_line(block_text, declaration)
 
     def _node_declaration(self, diagram_type: str, node_id: str, title: str) -> str:
         if diagram_type == "state":
@@ -130,6 +145,10 @@ class MermaidStructureRewriter:
             raise ValueError("mermaid edge requires a source and a target node")
         if source == target:
             raise ValueError("mermaid edge cannot be a self-loop")
+        if not block_text.strip():
+            # An empty block has no node declarations, so an edge line alone would not render;
+            # the first element must be a node (which scaffolds the header).
+            raise ValueError("cannot add an edge to an empty mermaid block")
         if diagram_type == "er":
             # er syntactically requires a cardinality and a label token; the default is a
             # zero-or-many to zero-or-many relationship with an empty, editable label.
@@ -183,7 +202,14 @@ class MermaidStructureRewriter:
                 body = self._mask_label_regions(lines[index].rstrip("\r\n"))
                 depth += body.count("{") - body.count("}")
                 index += 1
-        return "".join(kept)
+        remaining = "".join(kept)
+        if diagram_type == "class" and not "".join(kept[1:]).strip():
+            # Bundled mermaid 11.15.0 cannot parse a bare `classDiagram` header (the other
+            # node-bearing headers are valid alone), so deleting the last class node must leave
+            # the minimal renderable zero-node form — the default direction, no visual change —
+            # rather than persist a block the renderer cannot parse.
+            return self._append_block_line(remaining, "direction TB")
+        return remaining
 
     # ------------------------------------------------------------------ #
     # Delete edge (reusing the edge-title per-type location grammar)
