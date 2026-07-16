@@ -50,6 +50,7 @@ LOCAL_STATIC_FILES = (
     "search.css",
     "yaml-view.css",
     "json-view.css",
+    "code-block.css",
     "zoom-pan.js",
     "max-graph-constants.js",
     "max-graph-dom.js",

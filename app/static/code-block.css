@@ -1,0 +1,17 @@
+/* Rendered non-diagram fenced code blocks: override Prism's forced no-wrap/unbounded-height
+   defaults (`code[class*=language-], pre[class*=language-]`) so long lines wrap and tall blocks
+   cap at ~10 rows with a vertical scrollbar instead of a horizontal one / unbounded growth. Both
+   the `pre` and its `code` child need their own declaration: Prism sets `white-space`/`word-wrap`
+   directly on `code[class*=language-]`, so inheriting from `pre` alone would not override it. */
+.markdown-body pre[data-code-block-line] {
+  cursor: text;
+  max-height: 17em;
+  overflow: hidden auto;
+  overflow-wrap: break-word;
+  white-space: pre-wrap;
+}
+
+.markdown-body pre[data-code-block-line] code {
+  overflow-wrap: break-word;
+  white-space: pre-wrap;
+}

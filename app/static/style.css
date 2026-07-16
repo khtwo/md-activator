@@ -474,10 +474,6 @@ body.body--dark .markdown-body .checkbox-option-button:hover {
   color: #111827;
 }
 
-.markdown-body pre[data-code-block-line] {
-  cursor: text;
-}
-
 .markdown-body .code-block-editor {
   background: inherit;
   border: 1px solid #64748b;

@@ -31,7 +31,9 @@ The UI includes:
 - API failure banners use the server-provided JSON `detail` when present. If a failed response is not JSON, the browser shows a fallback response text or generic operation message instead of a JSON parsing error.
 - The viewer uses the browser viewport as the only page scrolling container;
   the app layout must not create a nested app scrollbar for normal markdown
-  reading.
+  reading. The `markdown-table-wrap` horizontal scroll container (below) and
+  the rendered code-block wrap/height-cap behavior (below) are the two
+  explicit, bounded exceptions to this rule.
 - The navigation toolbar is part of the page content flow above the rendered
   markdown, not a fixed app header.
 - Light and dark theme toolbar surfaces use neutral grey colors instead of
@@ -46,6 +48,12 @@ The UI includes:
 - Dark theme rendered content uses dark-appropriate surfaces for code blocks,
   inline code, tables, blockquotes, Mermaid diagrams, and maxGraph XML diagrams so default bright
   embedded backgrounds do not dominate the page.
+- Rendered non-diagram fenced code blocks wrap long lines (including a single run with no natural
+  break point, such as a long URL) at the markdown body width instead of scrolling horizontally.
+  A block's visible height is capped at approximately 10 text rows (10× the block's line-height,
+  plus its existing top/bottom padding); content beyond the cap scrolls vertically inside the block
+  rather than growing the page. This applies to the rendered view only — the double-click inline
+  code-block editor keeps its own wrap/resize behavior.
 - Rendered markdown tables use content-sized automatic width rather than
   stretching to the full rendered body width.
 - Rendered markdown tables must keep table display semantics; the table
