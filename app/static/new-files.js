@@ -60,10 +60,11 @@ const createFileNotificationController = ({
   let latestRequestId = 0;
   let pollTimer = null;
 
-  // `detect` distinguishes the detector (poll / menu refresh, which asks the server to
-  // rescan) from cache reads (page navigation, post-open badge refresh). Only detect=true
-  // triggers a server-side filesystem scan; everything else slices the server cache, so
-  // changing pages stays fast regardless of tree size or filter cost.
+  // `detect` selects the reply shape, not a scan: the endpoint never rescans (a server-side
+  // periodic detector owns that). detect=true marks a badge-refresh poll eligible for the
+  // small no-change reply when our list version still matches; detect=false marks a page
+  // navigation that always returns the requested page. Either way the server slices its
+  // in-memory cache, so every request stays fast regardless of tree size or filter cost.
   const fetchFiles = async (requestedPage = page.value, detect = false) => {
     const requestId = ++latestRequestId;
     const target = clampNewFilesPage(requestedPage, pageCount.value);
@@ -96,8 +97,8 @@ const createFileNotificationController = ({
     }
   };
 
-  // The menu-open refresh acts as the detector: rescan so the freshly-opened dropdown is
-  // current.
+  // Menu-open refresh: re-read the cache (as a no-change-eligible poll) so the freshly-opened
+  // dropdown reflects whatever the server-side detector last swapped in.
   const refresh = () => fetchFiles(page.value, true);
 
   const goToPage = (requestedPage) => {
@@ -131,7 +132,8 @@ const createFileNotificationController = ({
 
   const startPolling = () => {
     if (pollTimer !== null) return;
-    // The poll is the detector: each tick asks the server to rescan and refresh its cache.
+    // Each tick is a cache read (no scan): it picks up whatever the server-side detector last
+    // refreshed and updates the badge/list, replying no-change when our version still matches.
     fetchFiles(page.value, true);
     pollTimer = setInterval(() => fetchFiles(page.value, true), pollMs);
   };

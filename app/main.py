@@ -41,6 +41,12 @@ def resolve_content_root(root_arg: str | None = None) -> Path:
 CONTENT_ROOT = resolve_content_root()
 SAVE_PERMISSION_ERROR_DETAIL = "Unable to save markdown file: permission denied"
 RENDER_CACHE_CLEAN_INTERVAL_SECONDS = 10.0
+# Interval between server-side new-file detection scans. The periodic detector is the sole
+# refresher of the new-files cache: it rescans off the request path (in a worker thread) so the
+# `/api/new-files` endpoint only ever slices the in-memory cache and stays fast regardless of tree
+# size. 5 s matches the browser's prior detection cadence, so badge/notification latency is
+# unchanged.
+NEW_FILES_DETECT_INTERVAL_SECONDS = 5.0
 LOCAL_STATIC_FILES = (
     "style.css",
     "theme-dark.css",
@@ -124,10 +130,35 @@ async def clean_render_cache_periodically(
         renderer.clean_folder_metadata_cache()
 
 
+async def detect_new_files_periodically(
+    *,
+    sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+) -> None:
+    """Server-side detector: periodically rescan the tree and refresh the new-files cache.
+
+    This is the **sole** refresher of the new-files cache, so ``GET /api/new-files`` never scans
+    on the request path — it only ever slices the in-memory cache and stays fast regardless of
+    tree size or git-ignore cost. The scan is heavy (whole-tree walk, per-directory
+    ``git check-ignore`` subprocesses, per-file stats and content reads), so it runs in a worker
+    thread via :func:`asyncio.to_thread` and never blocks the event loop. It also drives the
+    desktop change notification wired into the service.
+
+    Seed-first (scan before the first sleep): the first scan warms the cache and establishes the
+    silent notification baseline at startup, so an early request is a cache hit and the
+    pre-existing backlog never notifies.
+    """
+    while True:
+        await asyncio.to_thread(new_files_service.detect)
+        await sleep(NEW_FILES_DETECT_INTERVAL_SECONDS)
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     global _inactivity_monitor
     cleanup_task = asyncio.create_task(clean_render_cache_periodically())
+    # Server-side new-file detector: the sole refresher of the new-files cache, so the
+    # `/api/new-files` endpoint stays a fast cache read (see detect_new_files_periodically).
+    detector_task = asyncio.create_task(detect_new_files_periodically())
     shutdown_task: asyncio.Task | None = None
     idle_timeout = auto_shutdown.resolve_idle_timeout()
     if idle_timeout is not None:
@@ -139,6 +170,9 @@ async def lifespan(_app: FastAPI):
         cleanup_task.cancel()
         with suppress(asyncio.CancelledError):
             await cleanup_task
+        detector_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await detector_task
         if shutdown_task is not None:
             shutdown_task.cancel()
             with suppress(asyncio.CancelledError):
@@ -557,27 +591,30 @@ def list_new_files(
     page: int = Query(default=1, ge=1, description="1-based page number (10 files per page)."),
     detect: bool = Query(
         default=False,
-        description="When true, rescan the tree and refresh the cache before responding "
-        "(the detector). When false, serve the cached list without scanning.",
+        description="Selects the reply shape, not a scan: the endpoint never rescans the tree "
+        "(a server-side periodic detector owns that). When true, marks a badge-refresh poll "
+        "eligible for the no-change reply; when false, marks a page navigation that always "
+        "returns the requested page.",
     ),
     if_list_version: str = Query(
         default="",
         alias="ifListVersion",
-        description="Caller's last-known list version; on a detect request that still "
+        description="Caller's last-known list version; on a detect poll that still "
         "matches, the server returns a no-change indicator instead of the list.",
     ),
 ) -> dict:
-    """Recently-created (last 2 days) markdown files, review-needing ones first then newest,
-    paged for the badge. Each item carries ``needsReview``; the payload carries
-    ``reviewCount`` and ``attentionCount`` (the badge value).
+    """Recently-active markdown files, review-needing ones first then newest, paged for the
+    badge. Each item carries ``needsReview``; the payload carries ``reviewCount`` and
+    ``attentionCount`` (the badge value).
 
-    Paging serves a cache slice (no scan); only ``detect=true`` rescans (R9). A detect
-    request whose ``ifListVersion`` still matches gets a small no-change indicator (R10).
+    Cache-only: this endpoint never scans the filesystem on the request path — it slices the
+    in-memory cache the server-side periodic detector maintains (R9), so it stays fast
+    regardless of tree size. ``detect=true`` only marks a badge poll eligible for the small
+    no-change reply when ``ifListVersion`` still matches (R10); ``detect=false`` (page
+    navigation) always returns the requested page. Neither scans.
     """
-    if detect:
-        new_files_service.detect()
-        if if_list_version and new_files_service.list_version() == if_list_version:
-            return {"status": "no-change", "listVersion": if_list_version}
+    if detect and if_list_version and new_files_service.list_version() == if_list_version:
+        return {"status": "no-change", "listVersion": if_list_version}
     return new_files_service.page(page=page)
 
 
