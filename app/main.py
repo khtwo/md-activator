@@ -19,6 +19,7 @@ from .auto_shutdown import InactivityMonitor
 from .markdown_service import MarkdownRenderer
 from .markdown_services.mermaid_repair import repair_mermaid_source
 from .markdown_services.models import VIEWER_SUFFIXES
+from .file_search import FileSearchService
 from .new_files import (
     DEFAULT_SPAN_DAYS,
     SPAN_DAYS_ENV,
@@ -91,6 +92,7 @@ LOCAL_STATIC_FILES = (
     "content-font-scale.js",
     "new-files.css",
     "new-files.js",
+    "search-files.js",
     "app.js",
 )
 
@@ -114,6 +116,12 @@ new_files_service = NewFilesService(
     # the poll) when the detector finds .md files created/changed after the session baseline.
     notifier=schedule_change_notification,
 )
+
+# Backs the toolbar file-name search popup (GET /api/search-files). Independent of the
+# new-files cache: it walks the tree live per distinct query and memoizes each query's match
+# list for a few seconds so page navigation does not re-walk. Repointed with the content root
+# in ``configure_content_root`` alongside ``new_files_service``.
+file_search_service = FileSearchService(CONTENT_ROOT)
 
 # Active only in single-file (``--open``) mode; see app/auto_shutdown.py. The HTTP
 # middleware records request activity against it and the lifespan watchdog reads it.
@@ -202,6 +210,8 @@ def configure_content_root(root: Path) -> Path:
     # fixed per-user path (shared across folders); this only updates the root it uses to
     # translate between relative listing paths and the absolute paths it stores.
     new_files_service.root_dir = root
+    # Point the file-name search at the served folder too (it walks the tree live per query).
+    file_search_service.root_dir = root
     os.environ["MD_VIEWER_ROOT"] = str(root)
     return root
 
@@ -628,6 +638,22 @@ def mark_all_new_files_viewed() -> dict:
     """
     new_files_service.mark_all_viewed()
     return new_files_service.page(page=1)
+
+
+@app.get("/api/search-files")
+def search_files(
+    q: str = Query(default="", description="Search query; matched by normalized file-name stem."),
+    page: int = Query(default=1, ge=1, description="1-based page number (10 results per page)."),
+) -> dict:
+    """Find files by name across the content root for the toolbar search popup.
+
+    Matches the normalized query (lowercased, non-alphanumerics stripped) as a substring of each
+    file's normalized stem; searches all files (no user-content filtering, only ``.git`` internals
+    skipped), stays inside the content root, and returns an alphabetically-ordered page (10/page,
+    capped at 500). A normalized query shorter than three characters returns an empty result set.
+    See ``doc/specification/current/features/file-navigation.md`` § File Name Search.
+    """
+    return file_search_service.search(q, page=page)
 
 
 @app.get("/api/image/{image_path:path}")

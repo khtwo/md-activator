@@ -118,6 +118,86 @@
                 flat
                 dense
                 round
+                icon="search"
+                class="viewer-nav-btn viewer-search-btn"
+                aria-label="Search files by name"
+              >
+                <q-menu
+                  class="viewer-new-files-menu viewer-search-menu"
+                  anchor="bottom right"
+                  self="top right"
+                >
+                  <div class="viewer-search-input-row">
+                    <q-input
+                      v-model="searchQuery"
+                      @update:model-value="onSearchInput"
+                      dense
+                      autofocus
+                      clearable
+                      placeholder="Search files by name"
+                      aria-label="Search files by name"
+                    ></q-input>
+                  </div>
+                  <q-list separator>
+                    <q-item v-if="searchTooShort" class="viewer-new-files-empty">
+                      <q-item-section>Type at least {{ searchMinChars }} characters</q-item-section>
+                    </q-item>
+                    <template v-else>
+                      <q-item
+                        v-for="item in searchResults"
+                        :key="item.path"
+                        clickable
+                        v-close-popup
+                        class="viewer-new-file-item"
+                        :title="item.path"
+                        @click="openSearchResult(item)"
+                      >
+                        <q-item-section>
+                          <div class="viewer-new-file-name">{{ item.name }}<span
+                            class="viewer-new-file-path"
+                            v-if="searchResultDir(item.path)"
+                          >{{ ' (' + searchResultDir(item.path) + '/)' }}</span></div>
+                          <div class="viewer-new-file-date">{{ item.created }}</div>
+                        </q-item-section>
+                      </q-item>
+                      <q-item v-if="!searchResults.length" class="viewer-new-files-empty">
+                        <q-item-section>No files match.</q-item-section>
+                      </q-item>
+                    </template>
+                  </q-list>
+                  <div
+                    class="viewer-new-files-footer viewer-search-footer"
+                    v-if="!searchTooShort && (searchPageCount > 1 || searchCapped)"
+                  >
+                    <span class="viewer-search-capped-note" v-if="searchCapped">Showing first 500</span>
+                    <div class="viewer-new-files-paging" v-if="searchPageCount > 1">
+                      <q-btn
+                        flat
+                        dense
+                        round
+                        icon="chevron_left"
+                        aria-label="Previous page"
+                        :disable="searchPage <= 1"
+                        @click.stop.prevent="prevSearchPage"
+                      ></q-btn>
+                      <span class="viewer-new-files-page-indicator">{{ searchPage }} / {{ searchPageCount }}</span>
+                      <q-btn
+                        flat
+                        dense
+                        round
+                        icon="chevron_right"
+                        aria-label="Next page"
+                        :disable="searchPage >= searchPageCount"
+                        @click.stop.prevent="nextSearchPage"
+                      ></q-btn>
+                    </div>
+                  </div>
+                </q-menu>
+              </q-btn>
+              <q-btn
+                flat
+                dense
+                round
                 icon="notifications"
                 class="viewer-nav-btn viewer-new-files-btn"
                 aria-label="New markdown files"
@@ -289,6 +369,7 @@
   <script src="/static/json-view.js?v={{ static_asset_version }}"></script>
   <script src="/static/content-font-scale.js?v={{ static_asset_version }}"></script>
   <script src="/static/new-files.js?v={{ static_asset_version }}"></script>
+  <script src="/static/search-files.js?v={{ static_asset_version }}"></script>
   <script src="/static/app.js?v={{ static_asset_version }}"></script>
 </body>
 </html>

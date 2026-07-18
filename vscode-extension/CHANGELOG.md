@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.9
+
+- Add toolbar file-name search across the content root
+- Fix new files refresh performance issue
+- Refresh new-files list via server-side periodic detector; keep API cache-only
+- Set the text block auto wrap
+- Rendered code blocks wrap long lines and cap height with vertical scroll
+
 ## 0.1.8
 
 - Source-toggle text mode is sticky: only the toggle click exits

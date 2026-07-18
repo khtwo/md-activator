@@ -4,7 +4,7 @@ This folder contains the local VSIX package for installing MD Activator in VS Co
 
 ## Contents
 
-- `md-activator-0.1.8.vsix`: VS Code extension package. It includes the extension code, icon, metadata, and bundled MD Activator server runtime.
+- `md-activator-0.1.9.vsix`: VS Code extension package. It includes the extension code, icon, metadata, and bundled MD Activator server runtime.
 - `README.md`: install and runtime notes for this package.
 
 ## Requirements
@@ -20,14 +20,14 @@ Python and `uv` are not bundled in the VSIX. On first preview, the extension use
 1. Open VS Code.
 2. Open Extensions.
 3. Select `...` > `Install from VSIX...`.
-4. Choose `md-activator-0.1.8.vsix` from this folder.
+4. Choose `md-activator-0.1.9.vsix` from this folder.
 5. Reload VS Code if prompted.
 6. Open a `.md` file and click the MD Activator preview icon in the editor title.
 
 Command-line install from this folder:
 
 ```powershell
-code --install-extension .\md-activator-0.1.8.vsix --force
+code --install-extension .\md-activator-0.1.9.vsix --force
 ```
 
 ## Verify
@@ -35,8 +35,8 @@ code --install-extension .\md-activator-0.1.8.vsix --force
 Expected package:
 
 ```text
-Name: md-activator-0.1.8.vsix
-Version: 0.1.8
+Name: md-activator-0.1.9.vsix
+Version: 0.1.9
 Publisher: khtwo
 Repository: https://github.com/khtwo/md-activator
 SHA256: 5EFD612AEDEA7F6FB86736A2264471A6764487FE9682A2FE06CF3B97429F4DFF

@@ -151,6 +151,13 @@ Errors:
 - `400`: path escapes the content root, or the target is a non-image file (extension not one of `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`, `.bmp`, `.svg`).
 - `404`: target image file does not exist.
 
+Endpoint: `GET /api/search-files`
+
+Finds files by name across the content root for the toolbar file-name search. Query params `q` and
+`page`; returns a paged, capped, alphabetically-ordered match set. The full contract (normalization,
+scope, containment, memoization, response shape) is specified in
+[file-navigation.md](file-navigation.md) § File Name Search.
+
 Endpoint: `POST /api/maxgraph-node`
 
 Persists a dragged maxGraph entity box's new location.

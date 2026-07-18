@@ -123,3 +123,17 @@ body.body--dark .viewer-new-files-footer {
   font-variant-numeric: tabular-nums;
   opacity: 0.8;
 }
+
+/* File-name search popup: the single-line input row at the top of the dropdown, above the shared
+   result list / footer styles (which are reused from the notification popup above). */
+.viewer-search-input-row {
+  padding: 8px 12px 4px;
+}
+
+/* When only the capped note (no paging) is present, keep it left-aligned like the footer's other
+   content; with paging present the shared footer's space-between layout positions both. */
+.viewer-search-capped-note {
+  font-size: 11px;
+  font-style: italic;
+  opacity: 0.6;
+}

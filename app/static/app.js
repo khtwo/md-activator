@@ -476,7 +476,7 @@ createApp({
     scheduleAutoRefresh(); initContentSearch(window);
     const newFilesController = createNewFilesController({ ref, computed, loadFile });
     newFilesController.startNewFilesPolling();
-    return { ...newFilesController, ...createFileDropdownCollapse({ fileOptions, ref, computed, getDropdownScrollEl: () => findDropdownScrollEl(), restoreDropdownScroll: createScrollRestorer({ nextTick, requestAnimationFrame: typeof requestAnimationFrame === 'function' ? requestAnimationFrame : null }), currentPath }), ...nav, ...createContentFontScale({ ref, computed }),
+    return { ...newFilesController, ...createFileSearchController({ ref, computed, loadFile }), ...createFileDropdownCollapse({ fileOptions, ref, computed, getDropdownScrollEl: () => findDropdownScrollEl(), restoreDropdownScroll: createScrollRestorer({ nextTick, requestAnimationFrame: typeof requestAnimationFrame === 'function' ? requestAnimationFrame : null }), currentPath }), ...nav, ...createContentFontScale({ ref, computed }),
       targetPath,
       currentPath,
       fileSelectStyle,

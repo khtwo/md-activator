@@ -20,7 +20,7 @@ body {
 
 .viewer-controls {
   display: grid;
-  grid-template-columns: auto auto auto 118px 106px;
+  grid-template-columns: auto auto auto auto 118px 106px;
   align-items: center;
   gap: 8px;
   grid-column: 3;
@@ -102,15 +102,15 @@ body {
   }
 
   .viewer-controls {
-    grid-template-columns: auto auto auto 118px 106px;
+    grid-template-columns: auto auto auto auto 118px 106px;
   }
 
   .viewer-auto-refresh-select {
-    grid-column: 4;
+    grid-column: 5;
   }
 
   .viewer-theme-select {
-    grid-column: 5;
+    grid-column: 6;
   }
 }
 
@@ -126,7 +126,7 @@ body {
   }
 
   .viewer-controls {
-    grid-template-columns: auto auto auto 118px 106px;
+    grid-template-columns: auto auto auto auto 118px 106px;
     justify-self: end;
     width: auto;
   }

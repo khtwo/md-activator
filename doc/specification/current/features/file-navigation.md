@@ -97,6 +97,43 @@ Desktop change notification:
 - **Delivery (cross-platform), with graceful fallback:** Windows shows a `win11toast` toast (no click action); macOS uses `osascript` `display notification`; Linux uses `notify-send`. On any other platform, a missing backend, or a backend error, the message is printed to the console instead (the same fallback stance as the `--open` announcement). Delivery runs on a daemon thread so it never blocks the poll and never crashes the request.
 - The notification is non-regressive: it does not change the `/api/new-files` payload, the endpoint contract, viewed state, the badge, or the frontend. It is opt-in at the service layer (a wired notifier); with none wired the detector behaves exactly as before.
 
+## File Name Search
+
+A toolbar surface (its button and popup are in [browser-ui.md](browser-ui.md)) finds files **by name**
+anywhere under the served content root. This is distinct from the In-Preview Content Search (which
+searches text inside the current rendered file).
+
+Endpoint: `GET /api/search-files`
+
+- Query params: `q` (the raw search string) and `page` (1-based, 10 results per page, clamped into range).
+- **Normalization** (applied identically to `q` and to each candidate file's name): lowercase, then
+  remove every non-alphanumeric character, keeping Unicode letters/digits. A **match** is: the
+  normalized query occurs in the normalized **file name** (extension included) at a position that
+  **overlaps the stem** — the match starts within the stem (the name without its final extension).
+  Because `normalize(name) == normalize(stem) + normalize(extension)`, this is a substring of the stem
+  or one spanning the stem into its extension, but never one confined entirely to the extension. So
+  `file name` matches `file-name.md`/`File_Name.txt`/`FileName.py`, and the full name `server-api.md`
+  (or a partial spanning the dot such as `api.md`) matches `server-api.md`, yet a bare `md`/`png` still
+  does not match every file of that type. When the normalized query is shorter than **3** characters
+  the endpoint returns an empty result set (`totalCount` 0, `files` `[]`, `pageCount` 1) rather than an
+  error.
+- **Scope**: all files, any extension, recursively under the content root. No user-content filtering —
+  git-ignored files, dotfiles, and `node_modules/` contents are all searchable. The **only** exclusion
+  is the `.git` metadata directory's internals (skipped for walk performance — not user content).
+- **Containment**: the walk does not follow symlinks; any result whose real path resolves outside the
+  content root is dropped. `q` is a filter only and is never interpreted as a filesystem path.
+- **Ordering & cap**: results are ordered alphabetically by name, then relative path; there is no age
+  limit. At most **500** matches are pageable — when more exist, the first 500 (after sorting) are kept
+  and the response sets `capped: true`.
+- Response shape: `{ query, page, pageSize, pageCount, totalCount, capped, files: [ { path, name,
+  created, createdEpoch, markdown } ] }`, where `created`/`createdEpoch` use the same activity time
+  (`max(creation, mtime)`) and `%Y-%m-%d %H:%M:%S` local formatting as the new-files list, and
+  `markdown` is whether `path` ends in `.md`.
+- **Execution model**: a **live filesystem walk** per distinct normalized query (independent of the
+  new-files cache). The current query's full sorted match list is **memoized for ~5 seconds** (or until
+  the query changes); page navigation within that window slices the memo without re-walking. The search
+  service is repointed with the content root the same way the new-files service is.
+
 ## Invariants & design constraints
 _Maintainer rules the behavior above depends on. Migrated from working memory 2026-07-02; see change package `../../changes/2026-07-02-memory-invariants-backfill/`._
 
